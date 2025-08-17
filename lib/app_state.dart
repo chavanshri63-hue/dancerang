@@ -3,79 +3,134 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'models/app_settings.dart';
+// Models (present in your repo)
 import 'models/class_item.dart';
-import 'models/video_item.dart';
 import 'models/booking.dart';
+import 'models/video_item.dart';
+import 'models/banner_item.dart';
+import 'models/app_settings.dart';
 
-/// App-wide role
+/// ---- Roles ---------------------------------------------------------------
 enum UserRole { student, faculty, admin }
 
-class AppState {
-  // ========= Theme =========
-  static final themeMode = ValueNotifier<ThemeMode>(ThemeMode.dark);
+String roleLabel(UserRole r) {
+  switch (r) {
+    case UserRole.student:
+      return 'Student';
+    case UserRole.faculty:
+      return 'Faculty';
+    case UserRole.admin:
+      return 'Admin';
+  }
+}
 
-  // ========= User / Role =========
-  static final ValueNotifier<UserRole> currentRole =
+/// ---- AppState : single source of truth -----------------------------------
+class AppState {
+  // THEME
+  static final ValueNotifier<ThemeMode> themeMode =
+      ValueNotifier<ThemeMode>(ThemeMode.dark);
+
+  // USER / ROLE
+  static final ValueNotifier<UserRole> _role =
       ValueNotifier<UserRole>(UserRole.student);
 
-  static void setRole(UserRole r) => currentRole.value = r;
+  /// listenable (for ValueListenableBuilder)
+  static ValueNotifier<UserRole> get roleListenable => _role;
 
-  // Optional display name for greeting
+  /// direct value (for simple checks)
+  static UserRole get currentRole => _role.value;
+
+  static void setRole(UserRole r) => _role.value = r;
+
+  // Optional display name (used in dashboard welcome)
   static final ValueNotifier<String> memberName =
       ValueNotifier<String>('Shree');
 
-  // ========= Classes (demo store) =========
+  // CLASSES
   static final ValueNotifier<List<ClassItem>> classes =
       ValueNotifier<List<ClassItem>>(<ClassItem>[]);
 
-  static void addClass(ClassItem c) => classes.value = [...classes.value, c];
+  static void addClass(ClassItem c) =>
+      classes.value = <ClassItem>[...classes.value, c];
 
-  static void removeClassAt(int i) {
-    final copy = [...classes.value];
-    if (i >= 0 && i < copy.length) copy.removeAt(i);
-    classes.value = copy;
+  static void removeClassAt(int index) {
+    final list = <ClassItem>[...classes.value];
+    if (index >= 0 && index < list.length) list.removeAt(index);
+    classes.value = list;
   }
 
-  // ========= Settings (admin editable) =========
-  static final settings = ValueNotifier<AppSettings>(AppSettings());
+  // DASHBOARD CONTENT (videos / updates etc.) – minimal APIs you call from screens
+  static final ValueNotifier<List<VideoItem>> videos =
+      ValueNotifier<List<VideoItem>>(<VideoItem>[]);
 
-  static String? get defaultUpiId => settings.value.upi;
+  static void addVideo(VideoItem v) =>
+      videos.value = <VideoItem>[...videos.value, v];
 
-  // ========= Studio bookings (optional local list) =========
+  // BOOKINGS (Studio / Events requests)
   static final ValueNotifier<List<Booking>> bookings =
       ValueNotifier<List<Booking>>(<Booking>[]);
 
-  static void addBooking(Booking b) => bookings.value = [...bookings.value, b];
+  static void addBooking(Booking b) =>
+      bookings.value = <Booking>[...bookings.value, b];
 
-  // ========= Online videos per style =========
-  static final Map<String, ValueNotifier<List<VideoItem>>> _videos = {};
+  // ADMIN SETTINGS (contact, UPI, hero bg, banners…)
+  static final ValueNotifier<AppSettings> settings =
+      ValueNotifier<AppSettings>(AppSettings());
 
-  static ValueNotifier<List<VideoItem>> videosForStyle(String style) {
-    return _videos.putIfAbsent(style, () => ValueNotifier<List<VideoItem>>(<VideoItem>[]));
-  }
+  /// Convenience getters used in screens
+  static String? get adminPhone => settings.value.adminPhone;
+  static String? get defaultUpiId => settings.value.upi;
 
-  static void addVideo(String style, VideoItem v) {
-    final list = videosForStyle(style);
-    list.value = [...list.value, v];
-  }
-
-  // ========= Persistence (settings only) =========
+  // ---------------- Persistence ----------------
   static Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('settings');
-    if (raw != null) {
+
+    // Settings
+    final rawSettings = prefs.getString('settings');
+    if (rawSettings != null) {
       try {
         settings.value =
-            AppSettings.fromJson(jsonDecode(raw) as Map<String, dynamic>);
-      } catch (_) {
-        // ignore corrupted state
-      }
+            AppSettings.fromJson(jsonDecode(rawSettings) as Map<String, dynamic>);
+      } catch (_) {/* ignore corrupted */}
+    }
+
+    // Classes (optional – only if you ever saved them)
+    final rawClasses = prefs.getString('classes');
+    if (rawClasses != null) {
+      try {
+        final list = (jsonDecode(rawClasses) as List)
+            .map((e) => ClassItem.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+        classes.value = list;
+      } catch (_) {}
+    }
+
+    // Role (optional)
+    final rawRole = prefs.getString('role');
+    if (rawRole != null) {
+      final r = UserRole.values.firstWhere(
+        (e) => e.name == rawRole,
+        orElse: () => UserRole.student,
+      );
+      _role.value = r;
     }
   }
 
   static Future<void> saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('settings', jsonEncode(settings.value.toJson()));
+  }
+
+  static Future<void> saveRole() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('role', _role.value.name);
+  }
+
+  static Future<void> saveClasses() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'classes',
+      jsonEncode(classes.value.map((e) => e.toJson()).toList()),
+    );
   }
 }

@@ -11,7 +11,7 @@ class DashboardScreen extends StatelessWidget {
     final text = Theme.of(context).textTheme;
 
     return ValueListenableBuilder<AppSettings>(
-      valueListenable: AppState.settings,
+      valueListenable: AppSta.settings,
       builder: (_, settings, __) {
         final bgPath = settings.dashboardBgPath;
         final hasBg = bgPath != null && bgPath.isNotEmpty && File(bgPath).existsSync();
