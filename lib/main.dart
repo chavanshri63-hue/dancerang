@@ -1,3 +1,4 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'app_state.dart';
 import 'theme.dart';
@@ -15,10 +16,7 @@ import 'screens/workshops_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/admin_dashboard_screen.dart';
 import 'screens/members_screen.dart';
-
-// New screens
 import 'screens/event_choreo_screen.dart';
-import 'screens/dashboard_content_manager.dart';
 
 // Screens (with args)
 import 'screens/class_detail_screen.dart';
@@ -28,10 +26,9 @@ import 'screens/online_style_screen.dart';
 // models
 import 'models/class_item.dart';
 
-Future<void> main() async {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // ensure settings (background + content cards) are loaded
-  await AppState.load(); // this should exist in your AppState (SharedPreferences)
+  await AppState.load(); // load persisted settings
   runApp(const DanceRangApp());
 }
 
@@ -50,6 +47,7 @@ class DanceRangApp extends StatelessWidget {
           darkTheme: AppTheme.dark,
           themeMode: mode,
 
+          // Simple named routes (no arguments)
           routes: {
             '/attendance/qr': (_) => const AttendanceQrScreen(),
             '/attendance/scan': (_) => const AttendanceScannerScreen(),
@@ -61,12 +59,10 @@ class DanceRangApp extends StatelessWidget {
             '/notifications': (_) => const NotificationsScreen(),
             '/admin': (_) => const AdminDashboardScreen(),
             '/members': (_) => const MembersScreen(),
-
-            // NEW
-            '/event-choreo': (_) => const EventChoreoScreen(),
-            '/dashboard/manage': (_) => const DashboardContentManagerScreen(),
+            '/events/choreo': (_) => const EventChoreoScreen(),
           },
 
+          // Routes that need arguments
           onGenerateRoute: (settings) {
             switch (settings.name) {
               case '/class/detail':
@@ -74,11 +70,13 @@ class DanceRangApp extends StatelessWidget {
                   settings: settings,
                   builder: (_) => const ClassDetailScreen(),
                 );
+
               case '/class/editor':
                 return MaterialPageRoute(
                   settings: settings,
                   builder: (_) => const ClassEditorScreen(),
                 );
+
               case '/online/style':
                 final style = (settings.arguments ?? '') as String;
                 return MaterialPageRoute(
@@ -90,7 +88,9 @@ class DanceRangApp extends StatelessWidget {
           },
 
           onUnknownRoute: (_) => MaterialPageRoute(
-            builder: (_) => const Scaffold(body: Center(child: Text('Route not found'))),
+            builder: (_) => const Scaffold(
+              body: Center(child: Text('Route not found')),
+            ),
           ),
 
           home: const HomeShell(),
@@ -125,7 +125,9 @@ class _HomeShellState extends State<HomeShell> {
         currentIndex: _index,
         onTap: (i) => setState(() => _index = i),
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: AppTheme.red,
+        selectedItemColor: AppState.themeMode.value == ThemeMode.dark
+            ? AppTheme.red
+            : AppTheme.red,
         unselectedItemColor: Colors.white70,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.dashboard_customize_rounded), label: 'Home'),

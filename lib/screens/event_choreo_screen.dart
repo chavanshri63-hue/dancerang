@@ -1,307 +1,185 @@
+// lib/screens/event_choreo_screen.dart
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../app_state.dart';
-import '../theme.dart';
+import '../widgets/section_scaffold.dart';
 
 class EventChoreoScreen extends StatelessWidget {
   const EventChoreoScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('DanceRang'),
-        centerTitle: true,
-        actions: [
-          // Settings (gear) visible ONLY here and ONLY to admin
-          ValueListenableBuilder(
-            valueListenable: AppState.currentRole,
-            builder: (_, role, __) {
-              final isAdmin = role.toString().contains('admin');
-              if (!isAdmin) return const SizedBox.shrink();
-              return IconButton(
-                tooltip: 'Coming soon: edit copy/prices',
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Inline settings coming soon')),
-                ),
-                icon: const Icon(Icons.settings_rounded),
-              );
-            },
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-        children: [
-          Text('Event Choreography', style: t.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 12),
-
-          // Pricing blocks
-          _PriceCard(
-            title: 'School Function',
-            base: 4500,
-            bulk: 3500,
-            detail: 'Per dance • Solo / Group • 5+ dances → ₹3500 per dance',
-          ),
-          const SizedBox(height: 12),
-          _PriceCard(
-            title: 'Sangeet',
-            base: 7500,
-            bulk: 5500,
-            detail: 'Per dance • Solo / Group • 5+ dances → ₹5500 per dance',
-          ),
-          const SizedBox(height: 12),
-          _PriceCard(
-            title: 'Corporate Performance',
-            base: 7500,
-            bulk: 5500,
-            detail: 'Per dance • Solo / Group • 5+ dances → ₹5500 per dance',
-          ),
-
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text('What’s included', style: TextStyle(fontWeight: FontWeight.w700)),
-                  SizedBox(height: 8),
-                  _Bullet('Music editing & choreography'),
-                  _Bullet('Dedicated private sessions'),
-                  _Bullet('Faculty/Admin availability on event day'),
+    return DRSectionScaffold(
+      sectionTitle: 'Event Choreography',
+      actions: [
+        // Settings should be here (not on Dashboard)
+        ValueListenableBuilder<UserRole>(
+          valueListenable: AppState.currentRole,
+          builder: (_, role, __) => (role == UserRole.admin)
+              ? IconButton(
+                  tooltip: 'Edit pricing',
+                  onPressed: () => _openEditDialog(context),
+                  icon: const Icon(Icons.settings_rounded),
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
+      child: ValueListenableBuilder<AppSettings>(
+        valueListenable: AppState.settings,
+        builder: (_, s, __) {
+          final e = s.eventChoreo;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _PriceCard(
+                title: 'School Function',
+                base: e.schoolBase,
+                bulk: e.schoolBulk,
+                note: 'per dance · Solo/Group (5+ dances: ₹${e.schoolBulk})',
+              ),
+              const SizedBox(height: 10),
+              _PriceCard(
+                title: 'Sangeet Dance',
+                base: e.sangeetBase,
+                bulk: e.sangeetBulk,
+                note: 'per dance · Solo/Group (5+ dances: ₹${e.sangeetBulk})',
+              ),
+              const SizedBox(height: 10),
+              _PriceCard(
+                title: 'Corporate Performance',
+                base: e.corporateBase,
+                bulk: e.corporateBulk,
+                note: 'per dance · Solo/Group (5+ dances: ₹${e.corporateBulk})',
+              ),
+              const SizedBox(height: 16),
+              Text('What’s included', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 6),
+              Text(e.included),
+              const SizedBox(height: 20),
+              Wrap(
+                spacing: 12, runSpacing: 12,
+                children: [
+                  FilledButton.icon(
+                    onPressed: () => _callNow(),
+                    icon: const Icon(Icons.call_rounded),
+                    label: const Text('Call now'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => _whatsapp(),
+                    icon: const Icon(Icons.whatsapp_rounded),
+                    label: const Text('WhatsApp'),
+                  ),
                 ],
               ),
-            ),
-          ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 
-          const SizedBox(height: 16),
-          _ActionsRow(),
-          const SizedBox(height: 12),
-          _BookForm(),
+  Future<void> _openEditDialog(BuildContext context) async {
+    final copy = AppState.settings.value.eventChoreo.copy();
+    final sb = TextEditingController(text: copy.schoolBase.toString());
+    final sk = TextEditingController(text: copy.schoolBulk.toString());
+    final sg = TextEditingController(text: copy.sangeetBase.toString());
+    final sgk = TextEditingController(text: copy.sangeetBulk.toString());
+    final cb = TextEditingController(text: copy.corporateBase.toString());
+    final ck = TextEditingController(text: copy.corporateBulk.toString());
+    final inc = TextEditingController(text: copy.included);
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Edit pricing & details'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _num(sb, 'School per dance (₹)'),
+              _num(sk, 'School 5+ (₹)'),
+              _num(sg, 'Sangeet per dance (₹)'),
+              _num(sgk, 'Sangeet 5+ (₹)'),
+              _num(cb, 'Corporate per dance (₹)'),
+              _num(ck, 'Corporate 5+ (₹)'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: inc,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'What’s included'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
         ],
       ),
     );
-  }
-}
 
-class _PriceCard extends StatelessWidget {
-  const _PriceCard({required this.title, required this.base, required this.bulk, required this.detail});
-  final String title;
-  final int base;
-  final int bulk;
-  final String detail;
+    if (ok == true) {
+      final e = AppState.settings.value.eventChoreo;
+      e.schoolBase = int.tryParse(sb.text.trim()) ?? e.schoolBase;
+      e.schoolBulk = int.tryParse(sk.text.trim()) ?? e.schoolBulk;
+      e.sangeetBase = int.tryParse(sg.text.trim()) ?? e.sangeetBase;
+      e.sangeetBulk = int.tryParse(sgk.text.trim()) ?? e.sangeetBulk;
+      e.corporateBase = int.tryParse(cb.text.trim()) ?? e.corporateBase;
+      e.corporateBulk = int.tryParse(ck.text.trim()) ?? e.corporateBulk;
+      e.included = inc.text.trim().isEmpty ? e.included : inc.text.trim();
 
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: t.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 6),
-            Text('₹$base per dance  •  5+ dances → ₹$bulk per dance'),
-            const SizedBox(height: 6),
-            Text(detail, style: const TextStyle(color: Colors.white70)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Bullet extends StatelessWidget {
-  const _Bullet(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Icon(Icons.check_circle_rounded, size: 18, color: AppTheme.red),
-        const SizedBox(width: 8),
-        Expanded(child: Text(text)),
-      ],
-    );
-  }
-}
-
-class _ActionsRow extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<AppSettings>(
-      valueListenable: AppState.settings,
-      builder: (_, s, __) {
-        return Row(
-          children: [
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: () => _call(s.adminPhone),
-                icon: const Icon(Icons.call_rounded),
-                label: const Text('Call now'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _whatsapp(s.whatsapp),
-                icon: const Icon(Icons.whatsapp),
-                label: const Text('WhatsApp'),
-              ),
-            ),
-          ],
+      // push into settings and persist
+      AppState.settings.value = AppState.settings.value.copy();
+      await AppState.saveSettings();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Updated')),
         );
-      },
-    );
+      }
+    }
   }
 
-  Future<void> _call(String? phone) async {
+  Widget _num(TextEditingController c, String label) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: TextField(
+          controller: c,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(labelText: label),
+        ),
+      );
+
+  Future<void> _callNow() async {
+    final phone = AppState.settings.value.adminPhone?.trim();
     if (phone == null || phone.isEmpty) return;
     final uri = Uri.parse('tel:$phone');
     await launchUrl(uri);
   }
 
-  Future<void> _whatsapp(String? number) async {
-    if (number == null || number.isEmpty) return;
-    final uri = Uri.parse('https://wa.me/${number.replaceAll(RegExp(r'[^0-9]'), '')}');
+  Future<void> _whatsapp() async {
+    final raw = (AppState.settings.value.whatsapp ?? AppState.settings.value.adminPhone ?? '').trim();
+    if (raw.isEmpty) return;
+    final number = raw.replaceAll(RegExp(r'[^0-9]'), ''); // sanitize
+    // open chat
+    final uri = Uri.parse('https://wa.me/$number');
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 }
 
-class _BookForm extends StatefulWidget {
-  @override
-  State<_BookForm> createState() => _BookFormState();
-}
-
-class _BookFormState extends State<_BookForm> {
-  final _form = GlobalKey<FormState>();
-  final _name = TextEditingController();
-  final _phone = TextEditingController();
-  final _location = TextEditingController();
-  final _date = TextEditingController();
-  final _notes = TextEditingController();
-  String _type = 'School Function';
-  int _dances = 1;
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _phone.dispose();
-    _location.dispose();
-    _date.dispose();
-    _notes.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    if (!_form.currentState!.validate()) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Request sent. We’ll contact you soon.')),
-    );
-    _form.currentState!.reset();
-  }
+class _PriceCard extends StatelessWidget {
+  const _PriceCard({required this.title, required this.base, required this.bulk, required this.note});
+  final String title;
+  final int base;
+  final int bulk;
+  final String note;
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Form(
-          key: _form,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Book now', style: TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _name,
-                decoration: const InputDecoration(labelText: 'Client name *'),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _phone,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Client phone *'),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _type,
-                items: const [
-                  DropdownMenuItem(value: 'School Function', child: Text('School Function')),
-                  DropdownMenuItem(value: 'Sangeet', child: Text('Sangeet')),
-                  DropdownMenuItem(value: 'Corporate Performance', child: Text('Corporate Performance')),
-                ],
-                onChanged: (v) => setState(() => _type = v ?? _type),
-                decoration: const InputDecoration(labelText: 'Event type'),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _location,
-                      decoration: const InputDecoration(labelText: 'Location'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _date,
-                      decoration: const InputDecoration(labelText: 'Event date'),
-                      readOnly: true,
-                      onTap: () async {
-                        final now = DateTime.now();
-                        final d = await showDatePicker(
-                          context: context,
-                          initialDate: now,
-                          firstDate: now,
-                          lastDate: now.add(const Duration(days: 365)),
-                        );
-                        if (d != null) _date.text = d.toLocal().toString().split(' ').first;
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Text('No. of dances:'),
-                  const SizedBox(width: 8),
-                  DropdownButton<int>(
-                    value: _dances,
-                    items: List.generate(10, (i) => i + 1)
-                        .map((n) => DropdownMenuItem(value: n, child: Text('$n')))
-                        .toList(),
-                    onChanged: (v) => setState(() => _dances = v ?? _dances),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _notes,
-                maxLines: 3,
-                decoration: const InputDecoration(labelText: 'Notes (optional)'),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _submit,
-                  icon: const Icon(Icons.send_rounded),
-                  label: const Text('Submit'),
-                ),
-              ),
-            ],
-          ),
-        ),
+      child: ListTile(
+        leading: const Icon(Icons.celebration_rounded),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text(note),
+        trailing: Text('₹$base'),
       ),
     );
   }

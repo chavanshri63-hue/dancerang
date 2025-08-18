@@ -1,5 +1,5 @@
 // lib/models/app_settings.dart
-import 'dart:convert';
+import 'banner_item.dart';
 
 class AppSettings {
   String? adminPhone;
@@ -9,11 +9,8 @@ class AppSettings {
   String? hours;
   String? upi;
 
-  /// Dashboard hero background (local file path via image_picker)
-  String? dashboardBgPath;
-
-  /// Admin-managed content cards on dashboard
-  List<BannerItem> bannerItems;
+  String? dashboardBgPath;                 // dashboard background image
+  List<BannerItem> bannerItems;            // dashboard content cards
 
   AppSettings({
     this.adminPhone,
@@ -49,7 +46,7 @@ class AppSettings {
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> j) {
-    final list = (j['banners'] as List?) ?? const [];
+    final raw = (j['banners'] as List?) ?? const [];
     return AppSettings(
       adminPhone: j['adminPhone'] as String?,
       whatsapp: j['whatsapp'] as String?,
@@ -58,28 +55,11 @@ class AppSettings {
       hours: j['hours'] as String?,
       upi: j['upi'] as String?,
       dashboardBgPath: j['dashboardBgPath'] as String?,
-      bannerItems: list
-          .map((e) => BannerItem.fromJson(Map<String, dynamic>.from(e)))
+      bannerItems: raw
+          .map((e) => BannerItem.fromJson(
+                Map<String, dynamic>.from(e as Map),
+              ))
           .toList(),
     );
   }
-
-  static AppSettings fromJsonString(String s) =>
-      AppSettings.fromJson(jsonDecode(s) as Map<String, dynamic>);
-
-  String toJsonString() => jsonEncode(toJson());
-}
-
-class BannerItem {
-  String? title;
-  String? path; // local file path
-
-  BannerItem({this.title, this.path});
-
-  BannerItem copy() => BannerItem(title: title, path: path);
-
-  Map<String, dynamic> toJson() => {'title': title, 'path': path};
-
-  factory BannerItem.fromJson(Map<String, dynamic> j) =>
-      BannerItem(title: j['title'] as String?, path: j['path'] as String?);
 }
