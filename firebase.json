@@ -1,0 +1,66 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "dancerang-733ea",
+          "appId": "1:883197608292:android:b9606518fa197f4555ba71",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "dancerang-733ea",
+          "appId": "1:883197608292:ios:90b3fddc730730f755ba71",
+          "uploadDebugSymbols": true,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "dancerang-733ea",
+          "appId": "1:883197608292:ios:90b3fddc730730f755ba71",
+          "uploadDebugSymbols": true,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "dancerang-733ea",
+          "configurations": {
+            "android": "1:883197608292:android:b9606518fa197f4555ba71",
+            "ios": "1:883197608292:ios:90b3fddc730730f755ba71",
+            "macos": "1:883197608292:ios:90b3fddc730730f755ba71",
+            "web": "1:883197608292:web:91ad8604742105b555ba71",
+            "windows": "1:883197608292:web:3a0eb27aff0179e855ba71"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "runtime": "nodejs20",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run lint",
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ],
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}

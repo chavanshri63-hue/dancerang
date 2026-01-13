@@ -1,0 +1,12 @@
+{
+  "name": "Bollywood Fusion",
+  "instructor": "Priya Sharma",
+  "category": "bollywood",
+  "level": "Intermediate",
+  "dateTime": { "seconds": 1730592000, "nanoseconds": 0 },
+  "isAvailable": true,
+  "price": "₹600",
+  "studio": "Studio B",
+  "imageUrl": "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800"
+}
+

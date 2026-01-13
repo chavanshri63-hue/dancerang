@@ -1,0 +1,38 @@
+{
+  "basic_monthly": {
+    "name": "Basic Monthly",
+    "price": 299,
+    "billingCycle": "monthly",
+    "description": "Access to all basic dance videos",
+    "priority": 1,
+    "trialEnabled": true,
+    "trialDays": 7,
+    "active": true,
+    "createdAt": "2024-01-01T00:00:00Z",
+    "updatedAt": "2024-01-01T00:00:00Z"
+  },
+  "premium_monthly": {
+    "name": "Premium Monthly",
+    "price": 599,
+    "billingCycle": "monthly",
+    "description": "Access to all premium dance videos and live classes",
+    "priority": 2,
+    "trialEnabled": true,
+    "trialDays": 14,
+    "active": true,
+    "createdAt": "2024-01-01T00:00:00Z",
+    "updatedAt": "2024-01-01T00:00:00Z"
+  },
+  "pro_annual": {
+    "name": "Pro Annual",
+    "price": 4999,
+    "billingCycle": "yearly",
+    "description": "Full access to all content for 1 year",
+    "priority": 3,
+    "trialEnabled": true,
+    "trialDays": 30,
+    "active": true,
+    "createdAt": "2024-01-01T00:00:00Z",
+    "updatedAt": "2024-01-01T00:00:00Z"
+  }
+}

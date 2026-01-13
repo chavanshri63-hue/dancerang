@@ -1,0 +1,42 @@
+# Build files
+build/
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/Generated.xcconfig
+ios/Flutter/app.flx
+ios/Flutter/app.zip
+ios/Flutter/flutter_assets/
+ios/Flutter/flutter_export_environment.sh
+ios/ServiceDefinitions.json
+ios/Runner/GeneratedPluginRegistrant.*
+
+# Generated files
+*.g.dart
+*.freezed.dart
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Dependencies
+node_modules/
+pubspec.lock
+
+# Firebase configs (keep these for backup)
+# android/app/google-services.json
+# ios/Runner/GoogleService-Info.plist
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp

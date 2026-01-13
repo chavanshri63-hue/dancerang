@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "883197608292",
+    "firebase_url": "https://dancerang-733ea-default-rtdb.firebaseio.com",
+    "project_id": "dancerang-733ea",
+    "storage_bucket": "dancerang-733ea.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:883197608292:android:b9606518fa197f4555ba71",
+        "android_client_info": {
+          "package_name": "com.dancerang.dancerang"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDcdx0Jm51nCVkbhhxKFHLnRCLgeEejRUI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,531 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      // Prefer custom claims; fall back to users doc role (case-insensitive)
+      return isSignedIn() && (
+             request.auth.token.admin == true ||
+             request.auth.token.role == 'Admin' ||
+             request.auth.token.role == 'admin' ||
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin' ||
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+    
+    function isFaculty() {
+      // Prefer custom claims; fall back to users doc role (case-insensitive)
+      return isSignedIn() && (
+             request.auth.token.faculty == true ||
+             request.auth.token.role == 'Faculty' ||
+             request.auth.token.role == 'faculty' ||
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Faculty' ||
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'faculty');
+    }
+    
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    
+    function isValidRole(role) {
+      // Accept both title-case and lowercase roles for compatibility
+      return role in ['Student', 'student', 'Faculty', 'faculty', 'Admin', 'admin'];
+    }
+    
+    function hasActiveSubscription() {
+      // Check if user has an active subscription
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)/subscriptions/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)/subscriptions/$(request.auth.uid)).data.status == 'active' &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)/subscriptions/$(request.auth.uid)).data.endDate > request.time;
+    }
+    
+    function hasValidUserData() {
+      // Relaxed for client-only onboarding; allow optional dob, bio, photoUrl
+      return request.resource.data.uid is string &&
+             request.resource.data.phone is string &&
+             request.resource.data.name is string &&
+             request.resource.data.role is string &&
+             request.resource.data.address is string &&
+             request.resource.data.isActive is bool &&
+             isValidRole(request.resource.data.role);
+    }
+    
+    function hasValidTimestampFields() {
+      // Allow serverTimestamp() by checking exists
+      return request.resource.data.createdAt != null &&
+             request.resource.data.updatedAt != null;
+    }
+    
+    // Users collection - User profiles
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin() || isFaculty();
+      allow create: if isSignedIn() &&
+                       isOwner(userId) &&
+                       hasValidUserData() &&
+                       hasValidTimestampFields();
+      allow update: if (isOwner(userId) &&
+                       hasValidUserData() &&
+                       // Allow role change for profile setup/editing
+                       (resource.data.role == null ||
+                        request.resource.data.role == resource.data.role || 
+                        isAdmin() ||
+                        // Allow role selection during profile setup
+                        !resource.exists) &&
+                       // Ensure updatedAt exists
+                       request.resource.data.updatedAt != null) ||
+                     // Allow admin to update any user's isActive status
+                     (isAdmin() && 
+                      request.resource.data.isActive is bool &&
+                      request.resource.data.updatedAt != null);
+      allow delete: if isAdmin();
+
+      // User enrollments subcollection (consistent spelling)
+      match /enrollments/{enrollmentId} {
+        allow read: if isOwner(userId) || isAdmin() || isFaculty();
+        allow write: if isOwner(userId) || isAdmin() || isFaculty();
+      }
+
+      // User notifications subcollection
+      match /notifications/{notificationId} {
+        allow read: if isOwner(userId) || isAdmin() || isFaculty();
+        allow create: if isSignedIn() && (isOwner(userId) || isAdmin() || isFaculty());
+        allow update: if isOwner(userId) || isAdmin() || isFaculty();
+        allow delete: if isAdmin() || isFaculty();
+      }
+
+      // User assignments subcollection
+      match /assignments/{assignmentId} {
+        // Students can read their own; admin/faculty can read/write to manage tasks
+        allow read: if isOwner(userId) || isAdmin() || isFaculty();
+        allow create, update, delete: if isAdmin() || isFaculty();
+      }
+
+      // User subscriptions subcollection (e.g., online videos access)
+      match /subscriptions/{subscriptionId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update, delete: if isAdmin();
+      }
+    }
+    
+    // Public content collections - Read for everyone, write only for admin
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /updates/{updateId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /classes/{classId} {
+      allow read: if true;
+      allow write: if isAdmin() || isFaculty();
+      // Allow admin/faculty to update class metadata (participant counts, etc.)
+      // Also allow students to update enrolledCount when exiting class
+      allow update: if isAdmin() || isFaculty() || 
+        (isSignedIn() && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['enrolledCount', 'lastEnrollmentUpdate', 'updated_at']) &&
+         request.resource.data.enrolledCount == resource.data.enrolledCount - 1);
+    }
+    
+    // Attendance: users can read their own records; admins/faculty can read
+    match /attendance/{attendanceId} {
+      allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin() || isFaculty());
+      // Allow owner, admin, or faculty to create attendance records
+      allow create: if isSignedIn() && (
+        request.resource.data.userId == request.auth.uid ||
+        isAdmin() ||
+        isFaculty()
+      );
+      allow update, delete: if false;
+    }
+    
+    // New attendance structure: classId/sessions/date/present/userId
+    match /attendance/{classId}/sessions/{date}/present/{userId} {
+      allow read: if isSignedIn() && (isOwner(userId) || isAdmin() || isFaculty());
+      // Allow attendance marking if user is enrolled in the class
+      allow create: if isSignedIn() && (
+        // User marking their own attendance and is enrolled
+        (isOwner(userId) && 
+         exists(/databases/$(database)/documents/enrollments/$(classId + '_' + userId)) &&
+         get(/databases/$(database)/documents/enrollments/$(classId + '_' + userId)).data.status == 'paid') ||
+        // Admin or faculty can mark attendance for anyone
+        isAdmin() ||
+        isFaculty()
+      );
+      allow update, delete: if false;
+    }
+    
+    match /workshops/{workshopId} {
+      allow read: if true;
+      // Allow admin or faculty to adjust workshop counters/metadata
+      allow write: if isAdmin() || isFaculty();
+    }
+
+    // Dedicated workshop attendance (separate from class attendance)
+    match /workshop_attendance/{docId} {
+      allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin() || isFaculty());
+      allow create: if isSignedIn() && (isAdmin() || isFaculty());
+      allow update, delete: if false;
+    }
+    
+    match /onlineVideos/{videoId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    // Subscription plans (admin-managed)
+    match /subscription_plans/{planId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Dance styles collection
+    match /dance_styles/{styleId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Assignments collection
+    match /assignments/{assignmentId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    // Recommendations collection - owner-only read (root)
+    match /recommendations/{recommendationId} {
+      allow read: if isSignedIn() && isOwner(resource.data.userId);
+      allow write: if isAdmin();
+    }
+    // User-scoped recommendations: allow the path owner to read
+    match /users/{userId}/recommendations/{recommendationId} {
+      allow read: if isSignedIn() && isOwner(userId);
+      allow write: if isAdmin();
+    }
+    // Generic nested recommendations fallback: require document to carry userId
+    match /{path=**}/recommendations/{recommendationId} {
+      allow read: if isSignedIn() && isOwner(resource.data.userId);
+      allow write: if isAdmin();
+    }
+    
+    // Payment validity monitoring
+    match /payment_validity/{validityId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    // Attendance alerts
+    match /attendance_alerts/{alertId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    // Payments: users can create their own payment records and update status only
+    match /payments/{paymentId} {
+      allow read: if isSignedIn() && (isOwner(resource.data.user_id) || isAdmin() || isFaculty());
+      // Relaxed create: validate ownership, basic fields; remaining validation handled server-side
+      allow create: if isSignedIn() &&
+                     request.resource.data.user_id == request.auth.uid &&
+                     request.resource.data.amount is int &&
+                     request.resource.data.amount > 0 &&
+                     request.resource.data.payment_type is string &&
+                     request.resource.data.item_id is string;
+      // Allow owner to update status/timestamps/transaction_id; admin can update for approvals
+      allow update: if isSignedIn() && (
+                     // Owner can update with field validation
+                     (isOwner(resource.data.user_id) &&
+                      request.resource.data.user_id == resource.data.user_id &&
+                      request.resource.data.amount == resource.data.amount &&
+                      request.resource.data.payment_type == resource.data.payment_type &&
+                      request.resource.data.item_id == resource.data.item_id &&
+                      request.resource.data.description == resource.data.description &&
+                      request.resource.data.status in ['pending', 'success', 'failed', 'cancelled'] &&
+                      request.resource.data.updated_at != null) ||
+                     // Admin can update payment status for cash payment approvals
+                     (isAdmin() &&
+                      request.resource.data.status in ['pending', 'success', 'failed', 'cancelled'] &&
+                      request.resource.data.updated_at != null)
+                   );
+      allow delete: if false;
+    }
+    
+    // User subscriptions: users can read their own subscriptions
+    match /users/{userId}/subscriptions/{subscriptionId} {
+      allow read: if isSignedIn() && (isOwner(userId) || isAdmin() || isFaculty());
+      allow write: if isAdmin(); // Only admin can create/update subscriptions
+    }
+    
+    // Global subscriptions: admin only
+    match /subscriptions/{subscriptionId} {
+      allow read: if isAdmin() || isFaculty();
+      allow write: if isAdmin();
+    }
+
+    // Finance transactions - admin/faculty read, admin write
+    match /transactions/{transactionId} {
+      allow read: if isSignedIn() && (isAdmin() || isFaculty());
+      allow write: if isAdmin();
+    }
+
+    // Approvals (e.g., cash payments) - admin/faculty read; clients can create request
+    match /approvals/{approvalId} {
+      allow read: if isAdmin() || isFaculty();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin() || isFaculty();
+    }
+    
+    // Collection group queries for subscriptions (admin only)
+    match /{path=**}/subscriptions/{subscriptionId} {
+      allow read: if isAdmin() || isFaculty();
+      allow write: if isAdmin();
+    }
+    
+    // User watch history: users can manage their own watch history
+    match /users/{userId}/watchHistory/{videoId} {
+      allow read, write: if isSignedIn() && isOwner(userId);
+    }
+
+    // Gallery media (photos/videos)
+    match /gallery/{mediaId} {
+      // Publicly viewable gallery
+      allow read: if true;
+      // Only admins can upload/edit/delete
+      allow write: if isAdmin();
+    }
+    
+    // App settings - Read for everyone, write only for admin
+    match /appSettings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // App config (e.g., contact info) - public read, admin write
+    match /app_config/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Registration collections - Users can manage their own registrations
+    match /classRegistrations/{registrationId} {
+      allow read: if isSignedIn() && (
+        isOwner(resource.data.userId) || 
+        isAdmin()
+      );
+      allow create: if isSignedIn() && 
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.createdAt == request.time;
+      allow update: if isSignedIn() && (
+        (isOwner(resource.data.userId) && 
+         request.resource.data.userId == resource.data.userId) ||
+        isAdmin()
+      ) && request.resource.data.updatedAt == request.time;
+      allow delete: if isSignedIn() && (
+        isOwner(resource.data.userId) || 
+        isAdmin()
+      );
+    }
+    
+    // Enrollments created by server: readable by owner and admin
+    match /class_enrollments/{enrollmentId} {
+      allow read: if isSignedIn() && (
+        isOwner(resource.data.userId) || 
+        isOwner(resource.data.user_id) || 
+        isAdmin() || 
+        isFaculty()
+      );
+      // Allow students to update their own enrollment status (e.g., exit class)
+      allow update: if isSignedIn() && (
+        isOwner(resource.data.userId) || 
+        isOwner(resource.data.user_id) || 
+        isAdmin() || 
+        isFaculty()
+      );
+      allow create: if isAdmin() || isFaculty(); // Admin and faculty can create enrollments for approvals
+      allow delete: if isAdmin();
+    }
+    match /workshop_enrollments/{enrollmentId} {
+      allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin() || isFaculty());
+      allow create, update: if isAdmin() || isFaculty(); // Admin and faculty can create/update workshop enrollments
+      allow delete: if isAdmin();
+    }
+    match /event_enrollments/{enrollmentId} {
+      allow read: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin());
+      allow write: if false;
+    }
+
+    // Global enrollments collection (consistent 'enrollments' spelling)
+    match /enrollments/{enrollmentId} {
+      allow read: if isSignedIn() && (
+        isOwner(resource.data.userId) || 
+        isOwner(resource.data.user_id) || 
+        isAdmin() || 
+        isFaculty()
+      );
+      allow create: if isSignedIn() && (isAdmin() || isFaculty());
+      allow update: if isSignedIn() && (
+        isOwner(resource.data.userId) || 
+        isOwner(resource.data.user_id) || 
+        isAdmin() || 
+        isFaculty()
+      );
+      allow delete: if isSignedIn() && (
+        isOwner(resource.data.userId) || 
+        isOwner(resource.data.user_id) || 
+        isAdmin()
+      );
+    }
+    
+    // User enrollments subcollection (consistent spelling)
+    match /users/{userId}/enrollments/{enrollmentId} {
+      allow read: if isSignedIn() && (isOwner(userId) || isAdmin() || isFaculty());
+      allow write: if isSignedIn() && (isOwner(userId) || isAdmin() || isFaculty());
+    }
+
+
+    // User stats triggers for real-time updates
+    match /user_stats_triggers/{userId} {
+      allow read, write: if isSignedIn() && (isOwner(userId) || isAdmin());
+    }
+
+    match /workshopRegistrations/{registrationId} {
+      allow read: if isSignedIn() && (
+        isOwner(resource.data.userId) || 
+        isAdmin()
+      );
+      allow create: if isSignedIn() && 
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.createdAt == request.time;
+      allow update: if isSignedIn() && (
+        (isOwner(resource.data.userId) && 
+         request.resource.data.userId == resource.data.userId) ||
+        isAdmin()
+      ) && request.resource.data.updatedAt == request.time;
+      allow delete: if isSignedIn() && (
+        isOwner(resource.data.userId) || 
+        isAdmin()
+      );
+    }
+    
+    // Event and choreography bookings
+    match /eventChoreoBookings/{bookingId} {
+      allow read: if isSignedIn() && (
+        isOwner(resource.data.userId) || 
+        isAdmin()
+      );
+      allow create: if isSignedIn() && 
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.createdAt != null;
+      allow update: if isSignedIn() && (
+        (isOwner(resource.data.userId) && 
+         request.resource.data.userId == resource.data.userId) ||
+        isAdmin()
+      ) && request.resource.data.updatedAt != null;
+      allow delete: if isSignedIn() && (
+        isOwner(resource.data.userId) || 
+        isAdmin()
+      );
+
+      // Per-booking chat messages
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && (
+          isOwner(resource.data.senderId) ||
+          isOwner(resource.data.userId) ||
+          isAdmin()
+        );
+        allow create: if isSignedIn() && (
+          request.resource.data.senderId == request.auth.uid &&
+          request.resource.data.ts != null
+        );
+        allow update, delete: if false;
+      }
+    }
+    
+    // Studio bookings
+    match /studioBookings/{bookingId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && 
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.createdAt != null;
+      allow update: if isSignedIn() && (
+        (isOwner(resource.data.userId) && 
+         request.resource.data.userId == resource.data.userId) ||
+        isAdmin()
+      ) && request.resource.data.updatedAt != null;
+      allow delete: if isSignedIn() && (
+        isOwner(resource.data.userId) || 
+        isAdmin()
+      );
+    }
+    
+    // General bookings collection
+    match /bookings/{bookingId} {
+      allow read: if isSignedIn() && (
+        isOwner(resource.data.userId) || 
+        isAdmin()
+      );
+      allow create: if isSignedIn() && 
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.createdAt == request.time;
+      allow update: if isSignedIn() && (
+        (isOwner(resource.data.userId) && 
+         request.resource.data.userId == resource.data.userId) ||
+        isAdmin()
+      ) && request.resource.data.updatedAt == request.time;
+      allow delete: if isSignedIn() && (
+        isOwner(resource.data.userId) || 
+        isAdmin()
+      );
+    }
+    
+    
+    // Analytics and logs (admin only)
+    match /analytics/{logId} {
+      allow read, write: if isAdmin();
+    }
+    
+    // Aggregated attendance statistics
+    match /stats/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isFaculty();
+    }
+    
+    // System logs (admin only)
+    match /systemLogs/{logId} {
+      allow read, write: if isAdmin();
+    }
+    
+    // Dance Styles Collection - Admin only for write, everyone can read
+    match /danceStyles/{styleId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    // Live Streams Collection - Admin only for write, everyone can read
+    match /liveStreams/{streamId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    // Feed collection - Public read, admin write (for photos/videos feed)
+    match /feed/{postId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // Deny all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,9 @@
+# Android Release Signing Configuration
+# Copy this file to key.properties and fill in your keystore details
+# DO NOT commit key.properties or upload-keystore.jks to git
+
+storePassword=YOUR_KEYSTORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=upload
+storeFile=upload-keystore.jks
+

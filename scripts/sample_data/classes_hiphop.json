@@ -1,0 +1,12 @@
+{
+  "name": "Hip Hop Basics",
+  "instructor": "Rajesh Kumar",
+  "category": "hiphop",
+  "level": "Beginner",
+  "dateTime": { "seconds": 1730505600, "nanoseconds": 0 },
+  "isAvailable": true,
+  "price": "₹500",
+  "studio": "Studio A",
+  "imageUrl": "https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=800"
+}
+

@@ -1,0 +1,12 @@
+{
+  "name": "Contemporary Flow",
+  "instructor": "Amit Singh",
+  "category": "contemporary",
+  "level": "Advanced",
+  "dateTime": { "seconds": 1730678400, "nanoseconds": 0 },
+  "isAvailable": true,
+  "price": "₹800",
+  "studio": "Studio C",
+  "imageUrl": "https://images.unsplash.com/photo-1508700929628-666bc8bd84ea?w=800"
+}
+
