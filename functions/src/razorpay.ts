@@ -196,15 +196,23 @@ export const finalizePayment = onCall<FinalizeData>(
     });
 
     if (paymentType === "class_fee") {
+      const classDoc = db.collection("classes").doc(itemId);
+      const classSnap = await tx.get(classDoc);
+      const classData = (classSnap.data() || {}) as any;
+      const totalSessions = Number(classData.numberOfSessions || 8);
       const enrollCol = db.collection("class_enrollments");
       tx.set(enrollCol.doc(), {
         user_id: uid,
+        userId: uid,
         class_id: itemId,
+        classId: itemId,
         payment_id: paymentId,
         enrolled_at: admin.firestore.FieldValue.serverTimestamp(),
         status: "active",
+        totalSessions: totalSessions,
+        completedSessions: 0,
+        remainingSessions: totalSessions,
       });
-      const classDoc = db.collection("classes").doc(itemId);
       tx.update(classDoc, {
         participant_count: admin.firestore.FieldValue.increment(1),
         currentBookings: admin.firestore.FieldValue.increment(1),
@@ -260,7 +268,6 @@ export const finalizePayment = onCall<FinalizeData>(
 
   // Attempt automatic payout/transfer to admin account (if configured)
   try {
-    // Allow env or functions config for admin account id
     const cfg = (functions.config()?.razorpay || {}) as any;
     const adminAccount =
       process.env.RAZORPAY_ADMIN_ACCOUNT_ID ||

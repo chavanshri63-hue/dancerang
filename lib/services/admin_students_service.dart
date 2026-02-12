@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
@@ -5,106 +7,178 @@ import 'package:flutter/material.dart';
 /// in classes and workshops
 class AdminStudentsService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static final Map<String, Map<String, dynamic>> _userCache = {};
 
   /// Get enrolled students for a specific class (Admin/Faculty)
   static Stream<List<Map<String, dynamic>>> getClassEnrolledStudents(String classId) {
-    // First try the new class_enrollments collection
-    return _firestore
+    final controller = StreamController<List<Map<String, dynamic>>>.broadcast();
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? classEnrollSub;
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? legacyEnrollSub;
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? globalEnrollSub;
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? attendanceSub;
+    Timer? debounce;
+
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> classEnrollDocs = [];
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> legacyEnrollDocs = [];
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> globalEnrollDocs = [];
+    Map<String, int> attendanceCounts = {};
+
+    Future<void> computeAndEmit() async {
+      final Map<String, Map<String, dynamic>> enrollmentByUser = {};
+      final Map<String, int> priorityByUser = {};
+
+      void addEnrollment(Map<String, dynamic> enrollmentData, String enrollmentId, int priority) {
+        final userId =
+            (enrollmentData['user_id'] ?? enrollmentData['userId'] ?? '').toString();
+        if (userId.isEmpty) return;
+        final current = priorityByUser[userId] ?? -1;
+        if (priority < current) return;
+        priorityByUser[userId] = priority;
+        enrollmentByUser[userId] = {
+          ...enrollmentData,
+          'enrollmentId': enrollmentId,
+        };
+      }
+
+      for (final doc in classEnrollDocs) {
+        addEnrollment(doc.data(), doc.id, 2);
+      }
+      for (final doc in legacyEnrollDocs) {
+        addEnrollment(doc.data(), doc.id, 2);
+      }
+      for (final doc in globalEnrollDocs) {
+        addEnrollment(doc.data(), doc.id, 1);
+      }
+
+      if (enrollmentByUser.isEmpty) {
+        controller.add([]);
+        return;
+      }
+
+      final userIds = enrollmentByUser.keys.toList();
+      final Map<String, Map<String, dynamic>> userDataMap = {};
+      final List<Future<void>> fetches = [];
+      for (final userId in userIds) {
+        final cached = _userCache[userId];
+        if (cached != null) {
+          userDataMap[userId] = cached;
+          continue;
+        }
+        fetches.add(_firestore.collection('users').doc(userId).get().then((doc) {
+          final data = doc.data() ?? {};
+          _userCache[userId] = data;
+          userDataMap[userId] = data;
+        }).catchError((_) {
+          _userCache[userId] = {};
+          userDataMap[userId] = {};
+        }));
+      }
+      if (fetches.isNotEmpty) {
+        await Future.wait(fetches);
+      }
+
+      final List<Map<String, dynamic>> students = [];
+      for (final userId in userIds) {
+        final enrollmentData = enrollmentByUser[userId] ?? {};
+        final userData = userDataMap[userId] ?? {};
+        int total = (enrollmentData['totalSessions'] ?? 0) as int;
+        if (total <= 0) {
+          final classDoc = await _firestore.collection('classes').doc(classId).get();
+          final classData = classDoc.data() ?? {};
+          total = (classData['numberOfSessions'] ?? 8) as int;
+        }
+        final completedFromEnroll = (enrollmentData['completedSessions'] ?? 0) as int;
+        final completedFromAttendance = attendanceCounts[userId] ?? 0;
+        final completed = completedFromAttendance > 0 ? completedFromAttendance : completedFromEnroll;
+        final remaining = total - completed;
+        students.add({
+          'userId': userId,
+          'name': userData['name'] ?? userData['displayName'] ?? 'Unknown',
+          'email': userData['email'] ?? '',
+          'phone': userData['phone'] ?? '',
+          'enrollmentDate': enrollmentData['createdAt'] ??
+              enrollmentData['enrolledAt'] ??
+              enrollmentData['enrolled_at'],
+          'completedSessions': completed,
+          'totalSessions': total,
+          'remainingSessions': enrollmentData['remainingSessions'] ??
+              (remaining < 0 ? 0 : remaining),
+          'packageName': enrollmentData['packageName'] ?? 'Unknown Package',
+          'paymentStatus': enrollmentData['paymentStatus'] ?? 'paid',
+          'lastAttendanceDate': enrollmentData['lastAttendanceDate'] ??
+              enrollmentData['lastSessionAt'],
+          'enrollmentId': enrollmentData['enrollmentId'],
+        });
+      }
+
+      controller.add(students);
+    }
+
+    void scheduleCompute() {
+      debounce?.cancel();
+      debounce = Timer(const Duration(milliseconds: 200), () {
+        computeAndEmit();
+      });
+    }
+
+    classEnrollSub = _firestore
         .collection('class_enrollments')
         .where('classId', isEqualTo: classId)
         .where('status', isEqualTo: 'active')
         .snapshots()
-        .asyncMap((enrollmentSnapshot) async {
-      List<Map<String, dynamic>> students = [];
-      
-      // If we have data from class_enrollments, use it
-      if (enrollmentSnapshot.docs.isNotEmpty) {
-        for (var enrollmentDoc in enrollmentSnapshot.docs) {
-          final enrollmentData = enrollmentDoc.data();
-          final userId = enrollmentData['user_id'] as String?;
-          
-          if (userId != null) {
-            try {
-              // Get user details
-              final userDoc = await _firestore.collection('users').doc(userId).get();
-              if (userDoc.exists) {
-                final userData = userDoc.data()!;
-                students.add({
-                  'userId': userId,
-                  'name': userData['name'] ?? userData['displayName'] ?? 'Unknown',
-                  'email': userData['email'] ?? '',
-                  'phone': userData['phone'] ?? '',
-                  'enrollmentDate': enrollmentData['createdAt'],
-                  'completedSessions': enrollmentData['completedSessions'] ?? 0,
-                  'totalSessions': enrollmentData['totalSessions'] ?? 1,
-                  'remainingSessions': enrollmentData['remainingSessions'] ?? 0,
-                  'packageName': enrollmentData['packageName'] ?? 'Unknown Package',
-                  'paymentStatus': enrollmentData['paymentStatus'] ?? 'pending',
-                  'lastAttendanceDate': enrollmentData['lastAttendanceDate'],
-                  'enrollmentId': enrollmentDoc.id,
-                });
-              }
-            } catch (e) {
-            }
-          }
-        }
-      } else {
-        // Fallback: Check users/{userId}/enrollments (canonical) then enrolments (legacy)
-        
-        // Get all users and check their enrolments subcollection
-        final usersSnapshot = await _firestore.collection('users').get();
-        
-        for (var userDoc in usersSnapshot.docs) {
-          final userId = userDoc.id;
-          try {
-            // Check if this user has enrollment for this class
-            var enrollmentDoc = await _firestore
-                .collection('users')
-                .doc(userId)
-                .collection('enrollments')
-                .doc(classId)
-                .get();
-            if (!enrollmentDoc.exists) {
-              enrollmentDoc = await _firestore
-                  .collection('users')
-                  .doc(userId)
-                  .collection('enrollments')
-                  .doc(classId)
-                  .get();
-            }
-            
-            if (enrollmentDoc.exists) {
-              final enrollmentData = enrollmentDoc.data()!;
-              final userData = userDoc.data();
-              
-              // Check if enrollment is active
-              if (enrollmentData['status'] == 'enrolled' && 
-                  enrollmentData['itemType'] == 'class' &&
-                  enrollmentData['itemId'] == classId) {
-                
-                students.add({
-                  'userId': userId,
-                  'name': userData['name'] ?? userData['displayName'] ?? 'Unknown',
-                  'email': userData['email'] ?? '',
-                  'phone': userData['phone'] ?? '',
-                  'enrollmentDate': enrollmentData['enrolledAt'],
-                  'completedSessions': enrollmentData['completedSessions'] ?? 0,
-                  'totalSessions': enrollmentData['totalSessions'] ?? 1,
-                  'remainingSessions': (enrollmentData['totalSessions'] ?? 1) - (enrollmentData['completedSessions'] ?? 0),
-                  'packageName': enrollmentData['packageName'] ?? 'Unknown Package',
-                  'paymentStatus': 'paid', // Assume paid if enrolled
-                  'lastAttendanceDate': enrollmentData['lastSessionAt'],
-                  'enrollmentId': enrollmentDoc.id,
-                });
-              }
-            }
-          } catch (e) {
-          }
-        }
-      }
-      
-      return students;
+        .listen((snap) {
+      classEnrollDocs = snap.docs;
+      scheduleCompute();
     });
+
+    legacyEnrollSub = _firestore
+        .collection('class_enrollments')
+        .where('class_id', isEqualTo: classId)
+        .where('status', isEqualTo: 'active')
+        .snapshots()
+        .listen((snap) {
+      legacyEnrollDocs = snap.docs;
+      scheduleCompute();
+    });
+
+    globalEnrollSub = _firestore
+        .collection('enrollments')
+        .where('status', isEqualTo: 'enrolled')
+        .where('itemType', isEqualTo: 'class')
+        .where('itemId', isEqualTo: classId)
+        .snapshots()
+        .listen((snap) {
+      globalEnrollDocs = snap.docs;
+      scheduleCompute();
+    });
+
+    attendanceSub = _firestore
+        .collection('attendance')
+        .where('classId', isEqualTo: classId)
+        .snapshots()
+        .listen((snap) {
+      final Map<String, int> counts = {};
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final userId = (data['userId'] ?? '').toString();
+        if (userId.isEmpty) continue;
+        final status = (data['status'] ?? 'present').toString().toLowerCase();
+        if (status == 'absent') continue;
+        counts[userId] = (counts[userId] ?? 0) + 1;
+      }
+      attendanceCounts = counts;
+      scheduleCompute();
+    });
+
+    controller.onCancel = () async {
+      await classEnrollSub?.cancel();
+      await legacyEnrollSub?.cancel();
+      await globalEnrollSub?.cancel();
+      await attendanceSub?.cancel();
+      debounce?.cancel();
+    };
+
+    return controller.stream;
   }
 
   /// Get enrolled students for a specific workshop (Admin/Faculty)

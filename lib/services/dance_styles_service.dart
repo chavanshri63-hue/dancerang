@@ -70,7 +70,7 @@ class DanceStylesService {
           .toList();
     } catch (e) {
       // Return default styles if Firestore fails
-      return _getDefaultStyles();
+      return defaultStyles();
     }
   }
 
@@ -87,7 +87,7 @@ class DanceStylesService {
           .map((doc) => DanceStyle.fromMap(doc.data(), doc.id))
           .toList();
     } catch (e) {
-      return _getDefaultStyles();
+      return defaultStyles();
     }
   }
 
@@ -137,10 +137,10 @@ class DanceStylesService {
       final snapshot = await _firestore.collection('danceStyles').limit(1).get();
       
       if (snapshot.docs.isEmpty) {
-        final defaultStyles = _getDefaultStyles();
+        final defaults = defaultStyles();
         
-        for (int i = 0; i < defaultStyles.length; i++) {
-          final style = defaultStyles[i];
+        for (int i = 0; i < defaults.length; i++) {
+          final style = defaults[i];
           await _firestore.collection('danceStyles').add({
             ...style.toMap(),
             'priority': i,
@@ -155,7 +155,7 @@ class DanceStylesService {
   }
 
   /// Get default styles as fallback
-  static List<DanceStyle> _getDefaultStyles() {
+  static List<DanceStyle> defaultStyles() {
     final now = DateTime.now();
     return [
       DanceStyle(
@@ -276,6 +276,226 @@ class DanceStylesService {
       return Color(int.parse(hexString.replaceFirst('#', '0xFF')));
     } catch (e) {
       return const Color(0xFFE53935); // Default red color
+    }
+  }
+}
+
+class ClassStylesService {
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static const String _collection = 'classStyles';
+
+  /// Get all active class styles
+  static Future<List<DanceStyle>> getAllStyles() async {
+    try {
+      final snapshot = await _firestore
+          .collection(_collection)
+          .where('isActive', isEqualTo: true)
+          .orderBy('priority')
+          .orderBy('name')
+          .get();
+
+      return snapshot.docs
+          .map((doc) => DanceStyle.fromMap(doc.data(), doc.id))
+          .toList();
+    } catch (e) {
+      return DanceStylesService.defaultStyles();
+    }
+  }
+
+  /// Get all class styles (including inactive) for admin
+  static Future<List<DanceStyle>> getAllStylesForAdmin() async {
+    try {
+      final snapshot = await _firestore
+          .collection(_collection)
+          .orderBy('priority')
+          .orderBy('name')
+          .get();
+
+      return snapshot.docs
+          .map((doc) => DanceStyle.fromMap(doc.data(), doc.id))
+          .toList();
+    } catch (e) {
+      return DanceStylesService.defaultStyles();
+    }
+  }
+
+  /// Add a new class style
+  static Future<String> addStyle(DanceStyle style) async {
+    try {
+      final docRef = await _firestore.collection(_collection).add(style.toMap());
+      return docRef.id;
+    } catch (e) {
+      throw Exception('Failed to add class style');
+    }
+  }
+
+  /// Update an existing class style
+  static Future<void> updateStyle(String id, DanceStyle style) async {
+    try {
+      await _firestore.collection(_collection).doc(id).update(style.toMap());
+    } catch (e) {
+      throw Exception('Failed to update class style');
+    }
+  }
+
+  /// Delete a class style
+  static Future<void> deleteStyle(String id) async {
+    try {
+      await _firestore.collection(_collection).doc(id).delete();
+    } catch (e) {
+      throw Exception('Failed to delete class style');
+    }
+  }
+
+  /// Toggle class style active status
+  static Future<void> toggleStyleStatus(String id, bool isActive) async {
+    try {
+      await _firestore.collection(_collection).doc(id).update({
+        'isActive': isActive,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Failed to toggle class style status');
+    }
+  }
+
+  /// Initialize class styles (seed from legacy or defaults)
+  static Future<void> initializeDefaultStyles() async {
+    try {
+      final snapshot = await _firestore.collection(_collection).limit(1).get();
+      if (snapshot.docs.isNotEmpty) return;
+
+      final legacySnapshot = await _firestore.collection('danceStyles').get();
+      if (legacySnapshot.docs.isNotEmpty) {
+        for (final doc in legacySnapshot.docs) {
+          final data = Map<String, dynamic>.from(doc.data());
+          data.putIfAbsent('createdAt', () => FieldValue.serverTimestamp());
+          data['updatedAt'] = FieldValue.serverTimestamp();
+          await _firestore.collection(_collection).add(data);
+        }
+        return;
+      }
+
+      final defaults = DanceStylesService.defaultStyles();
+      for (int i = 0; i < defaults.length; i++) {
+        final style = defaults[i];
+        await _firestore.collection(_collection).add({
+          ...style.toMap(),
+          'priority': i,
+        });
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+}
+
+class OnlineStylesService {
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static const String _collection = 'onlineStyles';
+
+  /// Get all active online styles
+  static Future<List<DanceStyle>> getAllStyles() async {
+    try {
+      final snapshot = await _firestore
+          .collection(_collection)
+          .where('isActive', isEqualTo: true)
+          .orderBy('priority')
+          .orderBy('name')
+          .get();
+
+      return snapshot.docs
+          .map((doc) => DanceStyle.fromMap(doc.data(), doc.id))
+          .toList();
+    } catch (e) {
+      return DanceStylesService.defaultStyles();
+    }
+  }
+
+  /// Get all online styles (including inactive) for admin
+  static Future<List<DanceStyle>> getAllStylesForAdmin() async {
+    try {
+      final snapshot = await _firestore
+          .collection(_collection)
+          .orderBy('priority')
+          .orderBy('name')
+          .get();
+
+      return snapshot.docs
+          .map((doc) => DanceStyle.fromMap(doc.data(), doc.id))
+          .toList();
+    } catch (e) {
+      return DanceStylesService.defaultStyles();
+    }
+  }
+
+  /// Add a new online style
+  static Future<String> addStyle(DanceStyle style) async {
+    try {
+      final docRef = await _firestore.collection(_collection).add(style.toMap());
+      return docRef.id;
+    } catch (e) {
+      throw Exception('Failed to add online style');
+    }
+  }
+
+  /// Update an existing online style
+  static Future<void> updateStyle(String id, DanceStyle style) async {
+    try {
+      await _firestore.collection(_collection).doc(id).update(style.toMap());
+    } catch (e) {
+      throw Exception('Failed to update online style');
+    }
+  }
+
+  /// Delete an online style
+  static Future<void> deleteStyle(String id) async {
+    try {
+      await _firestore.collection(_collection).doc(id).delete();
+    } catch (e) {
+      throw Exception('Failed to delete online style');
+    }
+  }
+
+  /// Toggle online style active status
+  static Future<void> toggleStyleStatus(String id, bool isActive) async {
+    try {
+      await _firestore.collection(_collection).doc(id).update({
+        'isActive': isActive,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Failed to toggle online style status');
+    }
+  }
+
+  /// Initialize online styles (seed from legacy or defaults)
+  static Future<void> initializeDefaultStyles() async {
+    try {
+      final snapshot = await _firestore.collection(_collection).limit(1).get();
+      if (snapshot.docs.isNotEmpty) return;
+
+      final legacySnapshot = await _firestore.collection('danceStyles').get();
+      if (legacySnapshot.docs.isNotEmpty) {
+        for (final doc in legacySnapshot.docs) {
+          final data = Map<String, dynamic>.from(doc.data());
+          data.putIfAbsent('createdAt', () => FieldValue.serverTimestamp());
+          data['updatedAt'] = FieldValue.serverTimestamp();
+          await _firestore.collection(_collection).add(data);
+        }
+        return;
+      }
+
+      final defaults = DanceStylesService.defaultStyles();
+      for (int i = 0; i < defaults.length; i++) {
+        final style = defaults[i];
+        await _firestore.collection(_collection).add({
+          ...style.toMap(),
+          'priority': i,
+        });
+      }
+    } catch (e) {
+      rethrow;
     }
   }
 }

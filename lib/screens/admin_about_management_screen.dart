@@ -258,6 +258,7 @@ class _AdminAboutManagementScreenState extends State<AdminAboutManagementScreen>
       'location': _locationController.text.trim(),
       'contactEmail': _contactEmailController.text.trim(),
       'contactPhone': _contactPhoneController.text.trim(),
+      'logo': _aboutData?['logo'] ?? '',
       'founders': founders,
       'studioHighlights': _aboutData?['studioHighlights'] ?? [],
       'awards': _aboutData?['awards'] ?? [],

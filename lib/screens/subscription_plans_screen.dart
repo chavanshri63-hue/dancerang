@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../services/payment_service.dart';
+import '../services/iap_service.dart';
+import '../services/online_subscription_service.dart';
 import '../widgets/glassmorphism_app_bar.dart';
 
 class SubscriptionPlansScreen extends StatefulWidget {
@@ -39,7 +40,10 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
             return const Center(child: CircularProgressIndicator(color: Color(0xFFE53935)));
           }
 
-          final plans = snapshot.data?.docs ?? [];
+        final plans = (snapshot.data?.docs ?? [])
+            .where((doc) => (doc.data()['active'] ?? true) == true)
+            .where((doc) => (doc.data()['billingCycle'] ?? 'monthly').toString() == 'monthly')
+            .toList();
           if (plans.isEmpty) {
             return const Center(
               child: Column(
@@ -94,28 +98,13 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
         return;
       }
 
-      final amount = (plan['price'] as num).toInt();
-      final name = plan['name'] ?? 'Subscription Plan';
-      final billingCycle = plan['billingCycle'] ?? 'monthly';
-
-      // Create payment using existing PaymentService
-      final paymentId = 'sub_${planId}_${DateTime.now().millisecondsSinceEpoch}';
-      final result = await PaymentService.processPayment(
-        paymentId: paymentId,
-        amount: amount,
-        description: '$name - $billingCycle subscription',
-        paymentType: 'subscription',
-        itemId: planId,
-        metadata: {
-          'planName': name,
-          'billingCycle': billingCycle,
-        },
-      );
+      // Single-plan purchase flow for online videos.
+      final result = await OnlineSubscriptionService.purchaseMonthly();
 
       if (result['success'] == true) {
-        _showSuccess('Subscription activated successfully!');
+        _showSuccess('Complete the purchase to activate your subscription.');
       } else {
-        _showError(result['message'] ?? 'Payment failed');
+        _showError(result['message'] ?? 'Could not start subscription purchase.');
       }
     } catch (e) {
       _showError('Error: ${e.toString()}');

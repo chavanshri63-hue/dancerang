@@ -70,6 +70,105 @@ class _BookingsList extends StatelessWidget {
   final String type; // 'event' | 'studio'
   const _BookingsList({required this.stream, required this.type});
 
+  void _showEventBookingDetails(BuildContext context, Map<String, dynamic> data) {
+    final name = (data['contactName'] as String?) ?? '—';
+    final phone = (data['phone'] as String?) ?? '—';
+    final packageName = (data['packageName'] as String?) ?? 'Event Booking';
+    final date = (data['eventDate'] is Timestamp) ? (data['eventDate'] as Timestamp).toDate() : null;
+    final totalAmount = (data['totalAmount'] as int?) ?? 0;
+    final paidAmount = (data['advanceAmount'] as int?) ?? 0;
+    final finalAmount = (data['finalAmount'] as int?) ?? 0;
+    final pendingAmount = finalAmount > 0 ? finalAmount : (totalAmount - paidAmount);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1B1B1B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Event Booking Details', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Package: $packageName', style: const TextStyle(color: Colors.white70)),
+            const SizedBox(height: 6),
+            Text('Name: $name', style: const TextStyle(color: Colors.white70)),
+            const SizedBox(height: 6),
+            Text('Phone: $phone', style: const TextStyle(color: Colors.white70)),
+            const SizedBox(height: 6),
+            Text(
+              date != null ? 'Event Date: ${date.day}/${date.month}/${date.year}' : 'Event Date: —',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 12),
+            Text('Total Amount: ₹$totalAmount', style: const TextStyle(color: Colors.white)),
+            const SizedBox(height: 4),
+            Text('Paid Amount: ₹$paidAmount', style: const TextStyle(color: Colors.greenAccent)),
+            const SizedBox(height: 4),
+            Text('Pending Amount: ₹${pendingAmount < 0 ? 0 : pendingAmount}', style: const TextStyle(color: Colors.orangeAccent)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showStudioBookingDetails(BuildContext context, Map<String, dynamic> data) {
+    final name = (data['name'] as String?) ?? '—';
+    final phone = (data['phone'] as String?) ?? '—';
+    final branch = (data['branch'] as String?) ?? '—';
+    final date = (data['date'] is Timestamp) ? (data['date'] as Timestamp).toDate() : null;
+    final time = (data['time'] as String?) ?? '';
+    final totalAmount = (data['totalAmount'] as int?) ?? 0;
+    final paidAmount = (data['advanceAmount'] as int?) ?? 0;
+    final finalAmount = (data['finalAmount'] as int?) ?? 0;
+    final pendingAmount = finalAmount > 0 ? finalAmount : (totalAmount - paidAmount);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1B1B1B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Studio Booking Details', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Name: $name', style: const TextStyle(color: Colors.white70)),
+            const SizedBox(height: 6),
+            Text('Phone: $phone', style: const TextStyle(color: Colors.white70)),
+            const SizedBox(height: 6),
+            Text(
+              date != null ? 'Date: ${date.day}/${date.month}/${date.year}' : 'Date: —',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 6),
+            Text('Time: $time', style: const TextStyle(color: Colors.white70)),
+            const SizedBox(height: 12),
+            Text('Branch: $branch', style: const TextStyle(color: Colors.white70)),
+            const SizedBox(height: 12),
+            Text('Total Amount: ₹$totalAmount', style: const TextStyle(color: Colors.white)),
+            const SizedBox(height: 4),
+            Text('Paid Amount: ₹$paidAmount', style: const TextStyle(color: Colors.greenAccent)),
+            const SizedBox(height: 4),
+            Text('Pending Amount: ₹${pendingAmount < 0 ? 0 : pendingAmount}', style: const TextStyle(color: Colors.orangeAccent)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Color _statusColor(String s) {
     switch (s) {
       case 'confirmed':
@@ -112,60 +211,65 @@ class _BookingsList extends StatelessWidget {
                 ? (data['contactName'] as String? ?? data['userId'] as String? ?? '')
                 : (data['userId'] as String? ?? '');
 
-            return Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        if (subtitle.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                          ),
-                        if (createdAt != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text('Created • ${createdAt.day}/${createdAt.month}/${createdAt.year}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                          ),
-                      ],
-                    ),
-                  ),
-                  if (type == 'event') ...[
-                    const SizedBox(width: 8),
-                    IconButton(
-                      tooltip: 'Open Chat',
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => EventChoreoChatScreen(
-                              bookingId: (data['bookingId'] as String?) ?? docs[i].id,
-                              isAdmin: true,
+            return GestureDetector(
+              onTap: type == 'studio'
+                  ? () => _showStudioBookingDetails(context, data)
+                  : () => _showEventBookingDetails(context, data),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          if (subtitle.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 12)),
                             ),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.chat, color: Colors.white70, size: 18),
+                          if (createdAt != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text('Created • ${createdAt.day}/${createdAt.month}/${createdAt.year}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (type == 'event') ...[
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'Open Chat',
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => EventChoreoChatScreen(
+                                bookingId: (data['bookingId'] as String?) ?? docs[i].id,
+                                isAdmin: true,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.chat, color: Colors.white70, size: 18),
+                      ),
+                    ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _statusColor(status).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: _statusColor(status).withValues(alpha: 0.5)),
+                      ),
+                      child: Text(status.toUpperCase(), style: TextStyle(color: _statusColor(status), fontSize: 10, fontWeight: FontWeight.bold)),
                     ),
                   ],
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _statusColor(status).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: _statusColor(status).withValues(alpha: 0.5)),
-                    ),
-                    child: Text(status.toUpperCase(), style: TextStyle(color: _statusColor(status), fontSize: 10, fontWeight: FontWeight.bold)),
-                  ),
-                ],
+                ),
               ),
             );
           },

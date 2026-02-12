@@ -6,6 +6,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import '../models/class_model.dart';
 import '../models/package_model.dart';
 import '../services/dance_styles_service.dart';
+import '../services/branches_service.dart';
 import '../services/event_controller.dart';
 import '../services/live_notification_service.dart';
 
@@ -36,7 +37,7 @@ class _AdminClassesManagementScreenState extends State<AdminClassesManagementScr
 
   Future<void> _loadCategories() async {
     try {
-      final danceStyles = await DanceStylesService.getAllStyles();
+      final danceStyles = await ClassStylesService.getAllStyles();
       _availableCategories = danceStyles.map((style) => style.name).toList();
       // Remove duplicates and ensure unique values
       _availableCategories = _availableCategories.toSet().toList();
@@ -429,7 +430,6 @@ class _ClassEditorDialogState extends State<_ClassEditorDialog> {
   final TextEditingController _name = TextEditingController();
   final TextEditingController _instructor = TextEditingController();
   final TextEditingController _price = TextEditingController();
-  final TextEditingController _studio = TextEditingController();
   final TextEditingController _spots = TextEditingController();
   final TextEditingController _imageUrl = TextEditingController();
   final TextEditingController _description = TextEditingController();
@@ -437,9 +437,11 @@ class _ClassEditorDialogState extends State<_ClassEditorDialog> {
   final TextEditingController _numberOfSessions = TextEditingController();
   String _category = 'hiphop';
   String _level = 'Beginner';
+  String _selectedBranch = '';
   bool _isAvailable = true;
   bool _uploading = false;
   List<String> _availableCategories = [];
+  List<String> _branches = [];
   
   // Days and time selection
   List<String> _selectedDays = [];
@@ -451,12 +453,13 @@ class _ClassEditorDialogState extends State<_ClassEditorDialog> {
   void initState() {
     super.initState();
     _loadCategories();
+    _loadBranches();
     final init = widget.initial;
     if (init != null) {
       _name.text = init.name;
       _instructor.text = init.instructor;
       _price.text = init.price;
-      _studio.text = init.studio;
+      _selectedBranch = init.studio;
       _spots.text = init.availableSpots?.toString() ?? '20';
       _imageUrl.text = init.imageUrl;
       _description.text = init.description;
@@ -477,7 +480,6 @@ class _ClassEditorDialogState extends State<_ClassEditorDialog> {
     _name.dispose();
     _instructor.dispose();
     _price.dispose();
-    _studio.dispose();
     _spots.dispose();
     _imageUrl.dispose();
     _description.dispose();
@@ -631,7 +633,7 @@ class _ClassEditorDialogState extends State<_ClassEditorDialog> {
               _dropdownField('Category', _category, _availableCategories, (v) => setState(() => _category = v)),
               _dropdownField('Level', _level, ['Beginner','Intermediate','Advanced'], (v) => setState(() => _level = v)),
               _textField('Price', _price),
-              _textField('Studio', _studio),
+              _dropdownField('Branch', _selectedBranch, _branches, (v) => setState(() => _selectedBranch = v)),
               // Removed Available Spots input as requested
               const SizedBox.shrink(),
               // Remove raw URL entry; keep only upload button
@@ -734,10 +736,23 @@ class _ClassEditorDialogState extends State<_ClassEditorDialog> {
                     ],
                   ),
                 ),
+              if (label == 'Branch')
+                DropdownMenuItem(
+                  value: 'ADD_NEW_BRANCH',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.add, color: Color(0xFFE53935), size: 16),
+                      const SizedBox(width: 8),
+                      const Text('Add New Branch', style: TextStyle(color: Color(0xFFE53935))),
+                    ],
+                  ),
+                ),
             ],
             onChanged: (v) {
               if (v == 'ADD_NEW_STYLE') {
                 _showAddStyleDialog();
+              } else if (v == 'ADD_NEW_BRANCH') {
+                _showAddBranchDialog();
               } else if (v != null) {
                 onChanged(v);
               }
@@ -772,6 +787,15 @@ class _ClassEditorDialogState extends State<_ClassEditorDialog> {
       );
       return;
     }
+    if (_selectedBranch.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a branch for the class'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
     
     // Create a sample dateTime for the class (using today's date with the start time)
     final now = DateTime.now();
@@ -787,7 +811,7 @@ class _ClassEditorDialogState extends State<_ClassEditorDialog> {
       'name': _name.text.trim(),
       'instructor': _instructor.text.trim(),
       'price': _price.text.trim(),
-      'studio': _studio.text.trim(),
+      'studio': _selectedBranch.trim(),
       'availableSpots': int.tryParse(_spots.text.trim()) ?? 20,
       'imageUrl': _imageUrl.text.trim(),
       'description': _description.text.trim(),
@@ -850,7 +874,7 @@ class _ClassEditorDialogState extends State<_ClassEditorDialog> {
 
   Future<void> _loadCategories() async {
     try {
-      final danceStyles = await DanceStylesService.getAllStyles();
+      final danceStyles = await ClassStylesService.getAllStyles();
       _availableCategories = danceStyles.map((style) => style.name).toList();
       // Remove duplicates and ensure unique values
       _availableCategories = _availableCategories.toSet().toList();
@@ -858,6 +882,40 @@ class _ClassEditorDialogState extends State<_ClassEditorDialog> {
     } catch (e) {
       // Fallback to default categories
       _availableCategories = ['hiphop', 'bollywood', 'contemporary', 'jazz', 'ballet', 'salsa'];
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _loadBranches() async {
+    try {
+      await BranchesService.initializeDefaultBranches();
+      final branches = await BranchesService.getAllBranches();
+      final seen = <String>{};
+      _branches = branches
+          .map((branch) => branch.name.trim())
+          .where((e) => e.isNotEmpty)
+          .map((e) => e[0].toUpperCase() + e.substring(1))
+          .where((e) => seen.add(e.toLowerCase()))
+          .toList();
+      final classSnapshot = await FirebaseFirestore.instance.collection('classes').get();
+      for (final doc in classSnapshot.docs) {
+        final studio = (doc.data()['studio'] ?? '').toString().trim();
+        if (studio.isNotEmpty && seen.add(studio.toLowerCase())) {
+          _branches.add(studio);
+        }
+      }
+      if (_selectedBranch.isNotEmpty && !_branches.contains(_selectedBranch)) {
+        _branches.add(_selectedBranch);
+      }
+      _branches.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      if (_selectedBranch.isEmpty && _branches.isNotEmpty) {
+        _selectedBranch = _branches.first;
+      }
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (_selectedBranch.isNotEmpty && !_branches.contains(_selectedBranch)) {
+        _branches = [_selectedBranch];
+      }
       if (mounted) setState(() {});
     }
   }
@@ -913,7 +971,7 @@ class _ClassEditorDialogState extends State<_ClassEditorDialog> {
                     updatedAt: now,
                   );
                   
-                  await DanceStylesService.addStyle(newStyle);
+                  await ClassStylesService.addStyle(newStyle);
                   // Reload categories and select the new style
                   await _loadCategories();
                   setState(() {
@@ -941,6 +999,80 @@ class _ClassEditorDialogState extends State<_ClassEditorDialog> {
               foregroundColor: Colors.white,
             ),
             child: const Text('Add Style'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAddBranchDialog() async {
+    final TextEditingController branchController = TextEditingController();
+
+    await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1B1B1B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Add New Branch', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: branchController,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: 'Branch Name',
+                labelStyle: const TextStyle(color: Colors.white70),
+                filled: true,
+                fillColor: const Color(0xFF2B2B2B),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFF404040)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final branchName = branchController.text.trim();
+              if (branchName.isNotEmpty) {
+                try {
+                  final now = DateTime.now();
+                  final newBranch = Branch(
+                    id: '',
+                    name: branchName,
+                    isActive: true,
+                    priority: 0,
+                    createdAt: now,
+                    updatedAt: now,
+                  );
+                  await BranchesService.addBranch(newBranch);
+                  await _loadBranches();
+                  setState(() {
+                    _selectedBranch = branchName;
+                  });
+                  if (mounted) Navigator.pop(context, true);
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to add branch. Please try again.'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE53935),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Add Branch'),
           ),
         ],
       ),

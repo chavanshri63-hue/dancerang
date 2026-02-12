@@ -5,6 +5,7 @@ import 'dart:async';
 import '../widgets/glassmorphism_app_bar.dart';
 import '../services/payment_service.dart';
 import 'video_player_screen.dart';
+import 'subscription_plans_screen.dart';
 
 class LiveStreamingScreen extends StatefulWidget {
   const LiveStreamingScreen({super.key});
@@ -570,7 +571,12 @@ class _LiveStreamCard extends StatelessWidget {
                             const SizedBox(height: 16),
                             ElevatedButton(
                               onPressed: () {
-                                // TODO: Navigate to subscription
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const SubscriptionPlansScreen(),
+                                  ),
+                                );
                               },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFFE53935),

@@ -152,7 +152,7 @@ class _AdminLiveDashboardState extends State<AdminLiveDashboard> {
           
           const SizedBox(height: 16),
           
-          // Revenue Metrics
+          // Online Revenue Metrics
           StreamBuilder<Map<String, dynamic>>(
             stream: LiveMetricsService.getLiveRevenueMetrics(),
             builder: (context, snapshot) {
@@ -162,14 +162,14 @@ class _AdminLiveDashboardState extends State<AdminLiveDashboard> {
               
               final data = snapshot.data ?? {};
               return _buildMetricCard(
-                title: 'Revenue Analytics',
+                title: 'Online Revenue',
                 icon: Icons.currency_rupee,
                 color: Colors.green,
                 metrics: [
-                  'Total Revenue: ₹${data['totalRevenue'] ?? 0}',
-                  'Today: ₹${data['todayRevenue'] ?? 0}',
-                  'This Week: ₹${data['thisWeekRevenue'] ?? 0}',
-                  'This Month: ₹${data['thisMonthRevenue'] ?? 0}',
+                  'Total Revenue: ₹${data['onlineTotal'] ?? data['totalRevenue'] ?? 0}',
+                  'Today: ₹${data['onlineToday'] ?? data['todayRevenue'] ?? 0}',
+                  'This Week: ₹${data['onlineWeek'] ?? data['thisWeekRevenue'] ?? 0}',
+                  'This Month: ₹${data['onlineMonth'] ?? data['thisMonthRevenue'] ?? 0}',
                   'Average per Payment: ₹${data['averagePayment'] ?? 0}',
                 ],
               );

@@ -7,14 +7,18 @@ import '../services/subscription_renewal_service.dart';
 import '../widgets/glassmorphism_app_bar.dart';
 import '../models/class_model.dart';
 import '../services/payment_service.dart';
+import '../services/iap_service.dart';
+import '../services/online_subscription_service.dart';
 import '../widgets/payment_option_dialog.dart';
 import 'add_edit_class_screen.dart';
 import '../services/admin_service.dart';
 import '../services/dance_styles_service.dart';
+import '../services/branches_service.dart';
 import '../models/banner_model.dart';
 import '../services/event_controller.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/app_config_service.dart';
+import '../config/demo_session.dart';
 // import 'my_classes_screen.dart'; // Deleted file
 import 'attendance_screen.dart';
 import 'qr_display_screen.dart';
@@ -50,6 +54,7 @@ import 'package_booking_screen.dart';
 import '../models/class_enrollment_model.dart';
 import '../services/live_notification_service.dart';
 import '../services/class_enrollment_service.dart';
+import '../services/branches_service.dart';
 
 // Skeleton while loading home content
 class _HomeSkeleton extends StatelessWidget {
@@ -61,10 +66,10 @@ class _HomeSkeleton extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Banner loading skeleton
-        Container(height: 180, decoration: BoxDecoration(color: base, borderRadius: BorderRadius.circular(16))),
+        Container(height: 280, decoration: BoxDecoration(color: base, borderRadius: BorderRadius.circular(16))),
         const SizedBox(height: 16),
         // Welcome card loading skeleton
-        Container(height: 120, decoration: BoxDecoration(color: base, borderRadius: BorderRadius.circular(16))),
+        Container(height: 90, decoration: BoxDecoration(color: base, borderRadius: BorderRadius.circular(16))),
         const SizedBox(height: 16),
         // Quick actions loading skeleton
         Row(
@@ -85,7 +90,7 @@ class _LiveBannerCarousel extends StatefulWidget {
 }
 
 class _LiveBannerCarouselState extends State<_LiveBannerCarousel> {
-  final PageController _controller = PageController(viewportFraction: 0.9);
+  final PageController _controller = PageController(viewportFraction: 0.96);
   int _index = 0;
 
   @override
@@ -100,13 +105,13 @@ class _LiveBannerCarouselState extends State<_LiveBannerCarousel> {
       future: AdminService.readBannersJson(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return Container(height: 200);
+          return Container(height: 280);
         }
         final raw = snapshot.data!;
         if (raw.isEmpty) {
           // Fallback placeholder when no active banners
           return SizedBox(
-            height: 200,
+            height: 280,
             child: Card(
               elevation: 8,
               shadowColor: const Color(0xFFE53935).withValues(alpha: 0.3),
@@ -343,7 +348,7 @@ class _StudioBannerCarouselState extends State<_StudioBannerCarousel> {
         if (raw.isEmpty) {
           // Fallback placeholder when no active banners
           return SizedBox(
-            height: 200,
+            height: 280,
             child: Card(
               elevation: 8,
               shadowColor: const Color(0xFFE53935).withValues(alpha: 0.3),
@@ -402,7 +407,7 @@ class _StudioBannerCarouselState extends State<_StudioBannerCarousel> {
                   final ctaText = b.ctaText;
                   final ctaLink = b.ctaLink;
                   return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 2.0),
                     child: Card(
                       elevation: 8,
                       shadowColor: const Color(0xFFE53935).withValues(alpha: 0.3),
@@ -789,13 +794,19 @@ Future<String> _getRevenueMTD() async {
     
     final paymentsSnapshot = await FirebaseFirestore.instance
         .collection('payments')
-        .where('status', isEqualTo: 'completed')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfMonth))
+        .where('status', whereIn: ['success', 'paid'])
         .get();
     
     double totalRevenue = 0;
     for (final doc in paymentsSnapshot.docs) {
       final data = doc.data();
+      final ts = (data['created_at'] ?? data['createdAt'] ?? data['updated_at']);
+      if (ts is Timestamp) {
+        final dt = ts.toDate();
+        if (!dt.isAfter(startOfMonth)) {
+          continue;
+        }
+      }
       final amount = (data['amount'] ?? 0).toDouble();
       totalRevenue += amount;
     }
@@ -1213,13 +1224,36 @@ class _RoleEnhancements extends StatelessWidget {
       _smallStatRow([
         _miniStat(context, Icons.people, 'Occupancy', data?.occupancyPercent ?? '—', const Color(0xFF42A5F5)),
       ]),
-      _infoCard(
-        context,
-        icon: Icons.currency_rupee,
-        title: 'Revenue (MTD)',
-        subtitle: data?.revenueMTD ?? '—',
-        actionText: 'Details',
-        onAction: () => _showRevenueDetails(context),
+      StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('payments')
+            .where('status', whereIn: ['success', 'paid'])
+            .snapshots(),
+        builder: (context, snapshot) {
+          final now = DateTime.now();
+          final startOfMonth = DateTime(now.year, now.month, 1);
+          double totalRevenue = 0;
+          for (final doc in snapshot.data?.docs ?? []) {
+            final data = doc.data() as Map<String, dynamic>;
+            final ts = (data['created_at'] ?? data['createdAt'] ?? data['updated_at']);
+            if (ts is Timestamp) {
+              final dt = ts.toDate();
+              if (!dt.isAfter(startOfMonth)) {
+                continue;
+              }
+            }
+            totalRevenue += (data['amount'] ?? 0).toDouble();
+          }
+          final value = '₹${totalRevenue.toStringAsFixed(0)}';
+          return _infoCard(
+            context,
+            icon: Icons.currency_rupee,
+            title: 'Revenue (MTD)',
+            subtitle: value,
+            actionText: 'Details',
+            onAction: () => _showRevenueDetails(context),
+          );
+        },
       ),
       _listCard(
         context,
@@ -1859,6 +1893,9 @@ class _HomeTabState extends State<HomeTab> {
               Builder(builder: (context) {
                 final user = FirebaseAuth.instance.currentUser;
                 if (user == null) {
+                  if (DemoSession.isActive) {
+                    return const _DemoHomeContent();
+                  }
                   return const Center(
                     child: Text(
                       'Please login to continue',
@@ -1877,8 +1914,13 @@ class _HomeTabState extends State<HomeTab> {
                       return const _HomeSkeleton();
                     }
                     final userData = snapshot.data?.data();
-                    final userName = userData?['name'] ?? 'DanceRang User';
-                    final userRole = userData?['role'] ?? 'Student';
+                    final isDemoUser = user.isAnonymous || userData?['isDemo'] == true;
+                    final userName = isDemoUser
+                        ? 'Demo'
+                        : (userData?['name'] ?? 'DanceRang User');
+                    final userRole = isDemoUser
+                        ? 'Demo'
+                        : (userData?['role'] ?? 'Student');
                     
                     return Column(
                       children: [
@@ -2091,7 +2133,7 @@ class _BannerCarouselState extends State<_BannerCarousel> {
     return Column(
       children: [
         SizedBox(
-          height: 180,
+          height: 240,
           child: PageView.builder(
             controller: _controller,
             itemCount: banners.length,
@@ -2178,14 +2220,14 @@ class _WelcomeCard extends StatelessWidget {
           ),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       color: const Color(0xFFE53935).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
@@ -2193,49 +2235,49 @@ class _WelcomeCard extends StatelessWidget {
                     child: const Icon(
                       Icons.waving_hand_rounded, 
                       color: Color(0xFFE53935), 
-                      size: 24,
+                      size: 20,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   const Text(
                     'Welcome!', 
                     style: TextStyle(
                       color: Color(0xFFF9FAFB), 
-                      fontSize: 24, 
+                      fontSize: 20, 
                       fontWeight: FontWeight.bold,
                       letterSpacing: 0.5,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(6),
+                    padding: const EdgeInsets.all(5),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.person_outline, color: Colors.white70, size: 16),
+                    child: const Icon(Icons.person_outline, color: Colors.white70, size: 14),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     userName,
                     style: const TextStyle(
                       color: Color(0xFFF9FAFB), 
-                      fontSize: 16, 
+                      fontSize: 14, 
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0.3,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Color(0xFFE53935), Color(0xFFD32F2F)],
@@ -2255,13 +2297,13 @@ class _WelcomeCard extends StatelessWidget {
                       role.toUpperCase(), 
                       style: const TextStyle(
                         color: Colors.white, 
-                        fontSize: 12, 
+                        fontSize: 11, 
                         fontWeight: FontWeight.bold,
                         letterSpacing: 0.8,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       role == 'admin'
@@ -2271,8 +2313,8 @@ class _WelcomeCard extends StatelessWidget {
                               : 'Learn and grow with us',
                       style: const TextStyle(
                         color: Colors.white70, 
-                        fontSize: 16,
-                        height: 1.4,
+                        fontSize: 14,
+                        height: 1.3,
                       ),
                     ),
                   ),
@@ -2282,6 +2324,20 @@ class _WelcomeCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _DemoHomeContent extends StatelessWidget {
+  const _DemoHomeContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const _WelcomeCard(role: 'demo', userName: 'Demo'),
+        const SizedBox(height: 12),
+      ],
     );
   }
 }
@@ -2849,6 +2905,8 @@ class _ClassesTabState extends State<ClassesTab> {
   List<DanceStyle> _danceStyles = [];
   List<String> _categories = [];
   String _selectedCategory = 'all';
+  List<String> _branches = [];
+  String _selectedBranch = 'all';
   String _searchQuery = '';
   String _audienceFilter = 'all'; // 'all' | 'kids' | 'adults'
   bool _isAdmin = false;
@@ -2857,10 +2915,15 @@ class _ClassesTabState extends State<ClassesTab> {
   StreamSubscription<Map<String, dynamic>>? _paymentRefreshSubscription;
   int _refreshKey = 0;
 
+  String _normalizeKey(String value) {
+    return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
   @override
   void initState() {
     super.initState();
     _loadCategories();
+    _loadBranches();
     _checkAdminRole();
     // Listen to class events and refresh classes list
     _eventSubscription = _eventController.eventStream.listen((event) {
@@ -2900,11 +2963,36 @@ class _ClassesTabState extends State<ClassesTab> {
 
   Future<void> _loadCategories() async {
     try {
-      _danceStyles = await DanceStylesService.getAllStyles();
+      _danceStyles = await ClassStylesService.getAllStyles();
       _categories = _danceStyles.map((style) => style.name).toList();
       if (mounted) setState(() {});
     } catch (e) {
       _categories = ['Hip Hop', 'Bollywood', 'Contemporary', 'Jazz', 'Ballet', 'Salsa'];
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _loadBranches() async {
+    try {
+      final branches = await BranchesService.getAllBranches();
+      final seen = <String>{};
+      _branches = branches
+          .map((branch) => branch.name.trim())
+          .where((e) => e.isNotEmpty)
+          .map((e) => e[0].toUpperCase() + e.substring(1))
+          .where((e) => seen.add(e.toLowerCase()))
+          .toList();
+      final classSnapshot = await FirebaseFirestore.instance.collection('classes').get();
+      for (final doc in classSnapshot.docs) {
+        final studio = (doc.data()['studio'] ?? '').toString().trim();
+        if (studio.isNotEmpty && seen.add(studio.toLowerCase())) {
+          _branches.add(studio);
+        }
+      }
+      _branches.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      if (mounted) setState(() {});
+    } catch (e) {
+      _branches = [];
       if (mounted) setState(() {});
     }
   }
@@ -2929,7 +3017,7 @@ class _ClassesTabState extends State<ClassesTab> {
 
   Stream<List<DanceClass>> _getClassesStream() {
     final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
+    if (currentUser == null && !DemoSession.isActive) {
       return Stream.value([]);
     }
 
@@ -2964,6 +3052,12 @@ class _ClassesTabState extends State<ClassesTab> {
       final isKids = explicitIsKids ?? inferredKids;
       return _audienceFilter == 'kids' ? isKids : !isKids;
     }).toList();
+
+    if (_selectedBranch != 'all') {
+      filtered = filtered.where((classItem) {
+        return _normalizeKey(classItem.studio) == _normalizeKey(_selectedBranch);
+      }).toList();
+    }
 
     if (_searchQuery.isEmpty) return filtered;
 
@@ -3065,6 +3159,13 @@ class _ClassesTabState extends State<ClassesTab> {
               backgroundColor: Colors.green,
             ),
           );
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Cash request failed: ${res['error'] ?? 'Unknown error'}'),
+              backgroundColor: Colors.red,
+            ),
+          );
         }
         return;
       }
@@ -3144,7 +3245,7 @@ class _ClassesTabState extends State<ClassesTab> {
             padding: const EdgeInsets.only(top: 8, bottom: 4),
             child: Center(child: _buildAudienceSegmented()),
           ),
-          // Category Filter with Admin Controls
+          // Branch Filter
           Container(
             height: 60,
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -3154,26 +3255,20 @@ class _ClassesTabState extends State<ClassesTab> {
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _categories.length + 1,
+                    itemCount: _branches.length + 1,
                     itemBuilder: (context, index) {
                       if (index == 0) {
-                        return _buildCategoryChip('All', 'all', Icons.all_inclusive);
+                        return _buildBranchChip('All', 'all', Icons.location_on);
                       }
-                      final category = _categories[index - 1];
-                      return _buildCategoryChip(category, category.toLowerCase().replaceAll(' ', ''), Icons.category);
+                      final branch = _branches[index - 1];
+                      return _buildBranchChip(branch, _normalizeKey(branch), Icons.location_on);
                     },
                   ),
                 ),
-                if (_isAdmin) ...[
-                  IconButton(
-                    onPressed: _showStyleManagement,
-                    icon: const Icon(Icons.edit, color: Color(0xFFE53935)),
-                    tooltip: 'Manage Styles',
-                  ),
-                ],
               ],
             ),
           ),
+          // Category filter removed as requested
           // Classes List
           Flexible(
             child: StreamBuilder<List<DanceClass>>(
@@ -3334,6 +3429,28 @@ class _ClassesTabState extends State<ClassesTab> {
         onSelected: (selected) {
           setState(() {
             _selectedCategory = id;
+          });
+        },
+        selectedColor: const Color(0xFFE53935),
+        checkmarkColor: Colors.white,
+        labelStyle: TextStyle(
+          color: isSelected ? Colors.white : const Color(0xFFF9FAFB),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBranchChip(String name, String id, IconData icon) {
+    final isSelected = _selectedBranch == id;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: FilterChip(
+        label: Text(name),
+        avatar: Icon(icon, size: 16),
+        selected: isSelected,
+        onSelected: (selected) {
+          setState(() {
+            _selectedBranch = id;
           });
         },
         selectedColor: const Color(0xFFE53935),
@@ -4186,21 +4303,8 @@ class _ClassDetailsModalState extends State<_ClassDetailsModal> {
                                globalEnrollmentSnap.data!.docs.any((doc) => doc.data()['status'] == 'completed'));
 
                           return Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _showClassChat(context),
-                          icon: const Icon(Icons.chat, size: 18),
-                          label: const Text('Class Chat'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFFE53935),
-                            side: const BorderSide(color: Color(0xFFE53935)),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
+                            children: [
+                              Expanded(
                                 child: isEnrolled
                                     ? ElevatedButton.icon(
                                         onPressed: null,
@@ -4216,16 +4320,16 @@ class _ClassDetailsModalState extends State<_ClassDetailsModal> {
                                         onPressed: danceClass.isFullyBooked
                                             ? null
                                             : () => _joinClassNow(context, danceClass),
-                          icon: const Icon(Icons.login, size: 18),
+                                        icon: const Icon(Icons.login, size: 18),
                                         label: Text(danceClass.isFullyBooked ? 'Full' : 'Join Now'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFE53935),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        ),
-                      ),
-                    ],
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFFE53935),
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                        ),
+                                      ),
+                              ),
+                            ],
                           );
                         },
                       );
@@ -4344,16 +4448,6 @@ class _ClassDetailsModalState extends State<_ClassDetailsModal> {
     );
   }
 
-  void _showClassChat(BuildContext context) {
-    Navigator.pop(context); // Close details modal first
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _ClassChatModal(danceClass: widget.danceClass),
-    );
-  }
-
   void _showClassPackages(BuildContext context) {
     Navigator.pop(context); // Close details modal first
     showModalBottomSheet(
@@ -4415,6 +4509,13 @@ class _ClassDetailsModalState extends State<_ClassDetailsModal> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Sent for admin confirmation (cash payment)'), backgroundColor: Colors.green),
           );
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Cash request failed: ${res['error'] ?? 'Unknown error'}'),
+              backgroundColor: Colors.red,
+            ),
+          );
         }
         return;
       }
@@ -4446,293 +4547,6 @@ class _ClassDetailsModalState extends State<_ClassDetailsModal> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error starting payment: $e'), backgroundColor: const Color(0xFFE53935)),
       );
-    }
-  }
-}
-
-// Class Chat Modal
-class _ClassChatModal extends StatefulWidget {
-  final DanceClass danceClass;
-
-  const _ClassChatModal({required this.danceClass});
-
-  @override
-  State<_ClassChatModal> createState() => _ClassChatModalState();
-}
-class _ClassChatModalState extends State<_ClassChatModal> {
-  final TextEditingController _messageController = TextEditingController();
-  final List<ChatMessage> _messages = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadMessages();
-  }
-
-  @override
-  void dispose() {
-    _messageController.dispose();
-    super.dispose();
-  }
-
-  void _loadMessages() {
-    // Mock chat messages
-    setState(() {
-      _messages.addAll([
-        ChatMessage(
-          id: '1',
-          sender: 'Priya Sharma',
-          message: 'Welcome to ${widget.danceClass.name}! Looking forward to dancing with you all.',
-          timestamp: DateTime.now().subtract(const Duration(hours: 2)),
-          isInstructor: true,
-        ),
-        ChatMessage(
-          id: '2',
-          sender: 'Raj Kumar',
-          message: 'Excited for the class! What should we bring?',
-          timestamp: DateTime.now().subtract(const Duration(hours: 1)),
-          isInstructor: false,
-        ),
-        ChatMessage(
-          id: '3',
-          sender: 'Meera Singh',
-          message: 'Just bring water and comfortable clothes!',
-          timestamp: DateTime.now().subtract(const Duration(minutes: 30)),
-          isInstructor: false,
-        ),
-      ]);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.7,
-      decoration: const BoxDecoration(
-        color: Color(0xFF1B1B1B),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: Colors.white.withOpacity(0.1)),
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE53935),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.chat, color: Colors.white, size: 20),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${widget.danceClass.name} Chat',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        '${_messages.length} messages',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close, color: Colors.white70),
-                ),
-              ],
-            ),
-          ),
-          // Messages
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final message = _messages[index];
-                return _buildMessageBubble(message);
-              },
-            ),
-          ),
-          // Message Input
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(color: Colors.white.withOpacity(0.1)),
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Type a message...',
-                      hintStyle: const TextStyle(color: Colors.white70),
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.1),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(25),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: _sendMessage,
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFE53935),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.send,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMessageBubble(ChatMessage message) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        mainAxisAlignment: message.isInstructor 
-            ? MainAxisAlignment.start 
-            : MainAxisAlignment.end,
-        children: [
-          if (message.isInstructor) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: const Color(0xFFE53935),
-              child: Text(
-                message.sender[0],
-                style: const TextStyle(color: Colors.white, fontSize: 12),
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: message.isInstructor 
-                    ? Colors.white.withOpacity(0.1)
-                    : const Color(0xFFE53935),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (message.isInstructor)
-                    Text(
-                      message.sender,
-                      style: const TextStyle(
-                        color: Color(0xFFE53935),
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  Text(
-                    message.message,
-                    style: TextStyle(
-                      color: message.isInstructor ? Colors.white : Colors.white,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _formatTime(message.timestamp),
-                    style: TextStyle(
-                      color: message.isInstructor 
-                          ? Colors.white70 
-                          : Colors.white.withOpacity(0.7),
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (!message.isInstructor) ...[
-            const SizedBox(width: 8),
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: Colors.white.withOpacity(0.2),
-              child: Text(
-                message.sender[0],
-                style: const TextStyle(color: Colors.white, fontSize: 12),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  String _formatTime(DateTime timestamp) {
-    final now = DateTime.now();
-    final difference = now.difference(timestamp);
-    
-    if (difference.inMinutes < 1) {
-      return 'Just now';
-    } else if (difference.inHours < 1) {
-      return '${difference.inMinutes}m ago';
-    } else if (difference.inDays < 1) {
-      return '${difference.inHours}h ago';
-    } else {
-      return '${difference.inDays}d ago';
-    }
-  }
-
-  void _sendMessage() {
-    if (_messageController.text.trim().isNotEmpty) {
-      setState(() {
-        _messages.add(
-          ChatMessage(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            sender: 'You',
-            message: _messageController.text.trim(),
-            timestamp: DateTime.now(),
-            isInstructor: false,
-          ),
-        );
-      });
-      _messageController.clear();
     }
   }
 }
@@ -5081,23 +4895,6 @@ class _ClassPackagesModal extends StatelessWidget {
       ),
     );
   }
-}
-
-// Chat Message Model
-class ChatMessage {
-  final String id;
-  final String sender;
-  final String message;
-  final DateTime timestamp;
-  final bool isInstructor;
-
-  ChatMessage({
-    required this.id,
-    required this.sender,
-    required this.message,
-    required this.timestamp,
-    required this.isInstructor,
-  });
 }
 
 // Studio Tab
@@ -5960,33 +5757,36 @@ class _StudioTabState extends State<StudioTab> with TickerProviderStateMixin {
                         final time = (d['time'] as String? ?? '');
                         final duration = (d['duration'] as int? ?? 1);
                         final amount = (d['advanceAmount'] as int? ?? 0);
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.05),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      date != null ? 'Date: ${date.day}/${date.month}/${date.year}  •  $time' : 'Date: —  •  $time',
-                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text('Duration: ${duration}h', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                                    const SizedBox(height: 8),
-                                    _statusBadge(status),
-                                  ],
+                        return GestureDetector(
+                          onTap: () => _showBookingDetails(docs[index].id, d),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        date != null ? 'Date: ${date.day}/${date.month}/${date.year}  •  $time' : 'Date: —  •  $time',
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text('Duration: ${duration}h', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                      const SizedBox(height: 8),
+                                      _statusBadge(status),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              Text('₹$amount', style: const TextStyle(color: Color(0xFFE53935), fontWeight: FontWeight.bold)),
-                            ],
+                                Text('₹$amount', style: const TextStyle(color: Color(0xFFE53935), fontWeight: FontWeight.bold)),
+                              ],
+                            ),
                           ),
                         );
                       },
@@ -6028,6 +5828,143 @@ class _StudioTabState extends State<StudioTab> with TickerProviderStateMixin {
         style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
       ),
     );
+  }
+
+  void _showBookingDetails(String bookingId, Map<String, dynamic> booking) {
+    final date = (booking['date'] is Timestamp) ? (booking['date'] as Timestamp).toDate() : null;
+    final time = (booking['time'] as String? ?? '');
+    final duration = (booking['duration'] as int? ?? 1);
+    final name = (booking['name'] as String? ?? '—');
+    final branch = (booking['branch'] as String? ?? '—');
+    final totalAmount = (booking['totalAmount'] as int? ?? 0);
+    final advanceAmount = (booking['advanceAmount'] as int? ?? 0);
+    final finalAmount = (booking['finalAmount'] as int? ?? 0);
+    final pendingAmount = finalAmount > 0 ? finalAmount : (totalAmount - advanceAmount);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1B1B1B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Booking Details', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Name: $name', style: const TextStyle(color: Colors.white70)),
+            const SizedBox(height: 6),
+            Text(
+              date != null ? 'Date: ${date.day}/${date.month}/${date.year}' : 'Date: —',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 6),
+            Text('Time: $time', style: const TextStyle(color: Colors.white70)),
+            const SizedBox(height: 6),
+            Text('Duration: ${duration}h', style: const TextStyle(color: Colors.white70)),
+            const SizedBox(height: 6),
+            Text('Branch: $branch', style: const TextStyle(color: Colors.white70)),
+            const SizedBox(height: 12),
+            Text('Total Amount: ₹$totalAmount', style: const TextStyle(color: Colors.white)),
+            const SizedBox(height: 4),
+            Text('Paid Amount: ₹$advanceAmount', style: const TextStyle(color: Colors.greenAccent)),
+            const SizedBox(height: 4),
+            Text('Pending Amount: ₹${pendingAmount < 0 ? 0 : pendingAmount}', style: const TextStyle(color: Colors.orangeAccent)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          if (pendingAmount > 0)
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _payPendingAmount(bookingId, booking, pendingAmount);
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFE53935),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Pay Pending'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _payPendingAmount(String bookingId, Map<String, dynamic> booking, int pendingAmount) async {
+    final choice = await PaymentOptionDialog.show(context);
+    if (choice == null) return;
+    final dateIso = (booking['date'] is Timestamp)
+        ? (booking['date'] as Timestamp).toDate().toIso8601String()
+        : '';
+    if (choice == PaymentChoice.cash) {
+      final paymentId = PaymentService.generatePaymentId();
+      final res = await PaymentService.requestCashPayment(
+        paymentId: paymentId,
+        amount: pendingAmount,
+        description: 'Studio Booking Pending: ${booking['duration'] ?? 1}h',
+        paymentType: 'studio_booking',
+        itemId: bookingId,
+        metadata: {
+          'booking_id': bookingId,
+          'name': booking['name'] ?? '',
+          'phone': booking['phone'] ?? '',
+          'purpose': booking['purpose'] ?? '',
+          'date': dateIso,
+          'time': booking['time'] ?? '',
+          'duration': booking['duration'] ?? 1,
+          'total_amount': booking['totalAmount'] ?? pendingAmount,
+          'advance_amount': booking['advanceAmount'] ?? 0,
+          'final_amount': pendingAmount,
+          'payment_stage': 'pending',
+        },
+      );
+      if (res['success'] == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sent for admin confirmation (cash payment)'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (choice == PaymentChoice.online) {
+      final paymentId = PaymentService.generatePaymentId();
+      final result = await PaymentService.processPayment(
+        paymentId: paymentId,
+        amount: pendingAmount,
+        description: 'Studio Booking Pending: ${booking['duration'] ?? 1}h',
+        paymentType: 'studio_booking',
+        itemId: bookingId,
+        metadata: {
+          'booking_id': bookingId,
+          'name': booking['name'] ?? '',
+          'phone': booking['phone'] ?? '',
+          'purpose': booking['purpose'] ?? '',
+          'date': dateIso,
+          'time': booking['time'] ?? '',
+          'duration': booking['duration'] ?? 1,
+          'total_amount': booking['totalAmount'] ?? pendingAmount,
+          'advance_amount': booking['advanceAmount'] ?? 0,
+          'final_amount': pendingAmount,
+          'payment_stage': 'pending',
+        },
+      );
+      if (!mounted) return;
+      if (result['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Redirecting to payment...'), backgroundColor: Colors.orange),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Payment failed: ${result['error'] ?? 'Unknown error'}'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
 
@@ -6169,12 +6106,15 @@ class _BookingFormDialog extends StatefulWidget {
   _BookingFormDialogState createState() => _BookingFormDialogState();
 }
 class _BookingFormDialogState extends State<_BookingFormDialog> {
+  static const List<String> _fallbackBranches = ['Balewadi', 'Wakad'];
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   int _selectedDuration = 1;
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _purposeController = TextEditingController();
+  List<String> _branches = [];
+  String _selectedBranch = '';
   Map<String, Map<String, List<String>>> _availabilityOverrides = {};
   List<Map<String, String>> _weeklyBlockedRanges = [];
 
@@ -6182,6 +6122,7 @@ class _BookingFormDialogState extends State<_BookingFormDialog> {
   void initState() {
     super.initState();
     _loadAvailabilitySettings();
+    _loadBranches();
   }
 
   @override
@@ -6192,6 +6133,33 @@ class _BookingFormDialogState extends State<_BookingFormDialog> {
     super.dispose();
   }
 
+  Future<void> _loadBranches() async {
+    try {
+      await BranchesService.initializeDefaultBranches();
+      final branches = await BranchesService.getAllBranches();
+      final seen = <String>{};
+      _branches = branches
+          .map((branch) => branch.name.trim())
+          .where((e) => e.isNotEmpty)
+          .map((e) => e[0].toUpperCase() + e.substring(1))
+          .where((e) => seen.add(e.toLowerCase()))
+          .toList();
+      if (_branches.isEmpty) {
+        _branches = List<String>.from(_fallbackBranches);
+      }
+      _branches.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      if (_selectedBranch.isEmpty && _branches.isNotEmpty) {
+        _selectedBranch = _branches.first;
+      }
+      if (mounted) setState(() {});
+    } catch (e) {
+      _branches = List<String>.from(_fallbackBranches);
+      if (_selectedBranch.isEmpty && _branches.isNotEmpty) {
+        _selectedBranch = _branches.first;
+      }
+      if (mounted) setState(() {});
+    }
+  }
   Future<void> _loadAvailabilitySettings() async {
     try {
       final doc = await FirebaseFirestore.instance
@@ -6394,6 +6362,11 @@ class _BookingFormDialogState extends State<_BookingFormDialog> {
                     () => _selectDuration(),
                   ),
                   
+                  const SizedBox(height: 12),
+                  
+                  if (_branches.isNotEmpty)
+                    _buildBranchDropdown(),
+                  
                   const SizedBox(height: 24),
                   
                   // Personal Details Section
@@ -6434,6 +6407,43 @@ class _BookingFormDialogState extends State<_BookingFormDialog> {
         fontSize: 18,
         fontWeight: FontWeight.bold,
       ),
+    );
+  }
+
+  Widget _buildBranchDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Select Branch', style: TextStyle(color: Colors.white70, fontSize: 12)),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF262626),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF404040)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _branches.contains(_selectedBranch)
+                  ? _selectedBranch
+                  : (_branches.isNotEmpty ? _branches.first : null),
+              isExpanded: true,
+              dropdownColor: const Color(0xFF1B1B1B),
+              style: const TextStyle(color: Colors.white),
+              icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFE53935)),
+              items: _branches
+                  .map((branch) => DropdownMenuItem(value: branch, child: Text(branch)))
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _selectedBranch = value);
+                }
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -6875,6 +6885,12 @@ class _BookingFormDialogState extends State<_BookingFormDialog> {
       );
       return;
     }
+    if (_selectedBranch.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a branch')),
+      );
+      return;
+    }
     
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -6914,6 +6930,7 @@ class _BookingFormDialogState extends State<_BookingFormDialog> {
       'name': _nameController.text.trim(),
       'phone': _phoneController.text.trim(),
       'purpose': _purposeController.text.trim(),
+      'branch': _selectedBranch,
       'date': Timestamp.fromDate(_selectedDate!),
       'time': '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}',
       'duration': _selectedDuration,
@@ -6943,6 +6960,7 @@ class _BookingFormDialogState extends State<_BookingFormDialog> {
             'name': _nameController.text.trim(),
             'phone': _phoneController.text.trim(),
             'purpose': _purposeController.text.trim(),
+            'branch': _selectedBranch,
             'date': _selectedDate!.toIso8601String(),
             'time': '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}',
             'duration': _selectedDuration,
@@ -6976,6 +6994,7 @@ class _BookingFormDialogState extends State<_BookingFormDialog> {
             'name': _nameController.text.trim(),
             'phone': _phoneController.text.trim(),
             'purpose': _purposeController.text.trim(),
+            'branch': _selectedBranch,
             'date': _selectedDate!.toIso8601String(),
             'time': '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}',
             'duration': _selectedDuration,
@@ -7014,21 +7033,151 @@ class _BookingFormDialogState extends State<_BookingFormDialog> {
     }
   }
 
-  void _processFullPayment() {
+  void _processFullPayment() async {
     if (_selectedDate == null || _selectedTime == null || _nameController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all required fields')),
       );
       return;
     }
-    
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Booking confirmed! Full payment processed.'),
-        backgroundColor: Color(0xFF4F46E5),
-      ),
-    );
+    if (_selectedBranch.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a branch')),
+      );
+      return;
+    }
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please login to book studio time'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final conflictCheck = await _checkBookingConflicts(_selectedDate!, _selectedTime!, _selectedDuration);
+    if (conflictCheck['hasConflict']) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Time slot conflict: ${conflictCheck['message']}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final totalAmount = _calculateTotalAmount();
+    final bookingRef = FirebaseFirestore.instance.collection('studioBookings').doc();
+    final bookingId = bookingRef.id;
+    final bookingData = {
+      'bookingId': bookingId,
+      'userId': user.uid,
+      'name': _nameController.text.trim(),
+      'phone': _phoneController.text.trim(),
+      'purpose': _purposeController.text.trim(),
+      'branch': _selectedBranch,
+      'date': Timestamp.fromDate(_selectedDate!),
+      'time': '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}',
+      'duration': _selectedDuration,
+      'status': 'pending',
+      'totalAmount': totalAmount,
+      'advanceAmount': totalAmount,
+      'finalAmount': 0,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    try {
+      await bookingRef.set(bookingData);
+      final choice = await PaymentOptionDialog.show(context);
+      if (choice == PaymentChoice.cash) {
+        final paymentId = PaymentService.generatePaymentId();
+        final res = await PaymentService.requestCashPayment(
+          paymentId: paymentId,
+          amount: totalAmount,
+          description: 'Studio Booking Full: ${_selectedDuration}h on ${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
+          paymentType: 'studio_booking',
+          itemId: bookingId,
+          metadata: {
+            'booking_id': bookingId,
+            'name': _nameController.text.trim(),
+            'phone': _phoneController.text.trim(),
+            'purpose': _purposeController.text.trim(),
+            'branch': _selectedBranch,
+            'date': _selectedDate!.toIso8601String(),
+            'time': '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}',
+            'duration': _selectedDuration,
+            'total_amount': totalAmount,
+            'advance_amount': totalAmount,
+            'final_amount': 0,
+            'payment_stage': 'full',
+          },
+        );
+        Navigator.pop(context);
+        if (res['success'] == true && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Sent for admin confirmation (cash payment)'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (choice == PaymentChoice.online) {
+        final paymentId = PaymentService.generatePaymentId();
+        final result = await PaymentService.processPayment(
+          paymentId: paymentId,
+          amount: totalAmount,
+          description: 'Studio Booking Full: ${_selectedDuration}h on ${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
+          paymentType: 'studio_booking',
+          itemId: bookingId,
+          metadata: {
+            'booking_id': bookingId,
+            'name': _nameController.text.trim(),
+            'phone': _phoneController.text.trim(),
+            'purpose': _purposeController.text.trim(),
+            'branch': _selectedBranch,
+            'date': _selectedDate!.toIso8601String(),
+            'time': '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}',
+            'duration': _selectedDuration,
+            'total_amount': totalAmount,
+            'advance_amount': totalAmount,
+            'final_amount': 0,
+            'payment_stage': 'full',
+          },
+        );
+        Navigator.pop(context);
+        if (!mounted) return;
+        if (result['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Redirecting to payment...'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Payment failed: ${result['error'] ?? 'Unknown error'}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to create booking: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   int _calculateTotalAmount() {
@@ -7055,6 +7204,9 @@ class _OnlineTabState extends State<OnlineTab> {
   @override
   void initState() {
     super.initState();
+    // If the user already purchased on Play but activation failed earlier,
+    // restore purchases to trigger server verification again.
+    IapService.instance.syncPurchases();
   }
 
   void _showSubscriptionPlans() {
@@ -7066,6 +7218,7 @@ class _OnlineTabState extends State<OnlineTab> {
 
   @override
   Widget build(BuildContext context) {
+    final stylesCollection = 'onlineStyles';
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: GlassmorphismAppBar(
@@ -7106,10 +7259,8 @@ class _OnlineTabState extends State<OnlineTab> {
             _buildHeroBanner(),
             StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: FirebaseFirestore.instance
-                  .collection('danceStyles')
+                  .collection(stylesCollection)
                   .where('isActive', isEqualTo: true)
-                  .orderBy('priority')
-                  .orderBy('name')
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -7149,6 +7300,19 @@ class _OnlineTabState extends State<OnlineTab> {
                   );
                 }
                 
+                styles.sort((a, b) {
+                  final aData = a.data();
+                  final bData = b.data();
+                  final aPriority = (aData['priority'] ?? 0) as int;
+                  final bPriority = (bData['priority'] ?? 0) as int;
+                  if (aPriority != bPriority) {
+                    return aPriority.compareTo(bPriority);
+                  }
+                  final aName = (aData['name'] ?? '').toString().toLowerCase();
+                  final bName = (bData['name'] ?? '').toString().toLowerCase();
+                  return aName.compareTo(bName);
+                });
+
                 return Column(
                   children: [
                     ...styles.map((doc) {
@@ -7606,8 +7770,8 @@ class _OnlineVideoCard extends StatelessWidget {
         final hasActiveSubscription = subscriptionSnapshot.hasData && 
             subscriptionSnapshot.data == true;
         
-        // All videos are now locked unless user has active subscription
-        final isLocked = !hasActiveSubscription;
+        // Lock only paid videos if subscription is missing
+        final isLocked = isPaidContent && !hasActiveSubscription;
 
         return Card(
           elevation: 6,
@@ -7841,7 +8005,7 @@ class _VideoSectionBuilder extends StatelessWidget {
   Widget build(BuildContext context) {
     // Check if user is authenticated
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
+    if (user == null && !DemoSession.isActive) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -8016,8 +8180,8 @@ class _StyleVideoCard extends StatelessWidget {
         final hasActiveSubscription = subscriptionSnapshot.hasData && 
             subscriptionSnapshot.data == true;
         
-        // All videos are now locked unless user has active subscription
-        final isLocked = !hasActiveSubscription;
+        // Lock only paid videos if subscription is missing
+        final isLocked = isPaidContent && !hasActiveSubscription;
 
         return Card(
           elevation: 4,
@@ -8469,6 +8633,65 @@ class _EnrolButtonState extends State<_EnrolButton> {
         });
       } catch (e) {
         // User subcollection might not exist, that's okay
+      }
+
+      // Also update legacy class_enrollments so admin/faculty list updates
+      try {
+        final classEnrollments = FirebaseFirestore.instance
+            .collection('class_enrollments');
+        final directQuery = await classEnrollments
+            .where('classId', isEqualTo: classId)
+            .where('user_id', isEqualTo: user.uid)
+            .where('status', isEqualTo: 'active')
+            .get();
+        for (final doc in directQuery.docs) {
+          await doc.reference.update({
+            'status': 'unenrolled',
+            'unenrolledAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+
+        final directQueryAlt = await classEnrollments
+            .where('classId', isEqualTo: classId)
+            .where('userId', isEqualTo: user.uid)
+            .where('status', isEqualTo: 'active')
+            .get();
+        for (final doc in directQueryAlt.docs) {
+          await doc.reference.update({
+            'status': 'unenrolled',
+            'unenrolledAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+
+        final legacyQuery = await classEnrollments
+            .where('class_id', isEqualTo: classId)
+            .where('user_id', isEqualTo: user.uid)
+            .where('status', isEqualTo: 'active')
+            .get();
+        for (final doc in legacyQuery.docs) {
+          await doc.reference.update({
+            'status': 'unenrolled',
+            'unenrolledAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+
+        final legacyQueryAlt = await classEnrollments
+            .where('class_id', isEqualTo: classId)
+            .where('userId', isEqualTo: user.uid)
+            .where('status', isEqualTo: 'active')
+            .get();
+        for (final doc in legacyQueryAlt.docs) {
+          await doc.reference.update({
+            'status': 'unenrolled',
+            'unenrolledAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      } catch (e) {
+        // Ignore legacy enrollment update errors
       }
 
       // Decrement class enrollment count
@@ -9995,7 +10218,7 @@ class _StyleManagementModalState extends State<_StyleManagementModal> {
         updatedAt: now,
       );
       
-      await DanceStylesService.addStyle(newStyle);
+      await ClassStylesService.addStyle(newStyle);
       _newStyleController.clear();
       widget.onCategoriesUpdated();
       if (mounted) {
@@ -10033,7 +10256,7 @@ class _StyleManagementModalState extends State<_StyleManagementModal> {
 
     try {
       // Find the style by name and update it
-      final styles = await DanceStylesService.getAllStylesForAdmin();
+      final styles = await ClassStylesService.getAllStylesForAdmin();
       final styleToUpdate = styles.firstWhere(
         (style) => style.name == oldName,
         orElse: () => throw Exception('Style not found'),
@@ -10051,7 +10274,7 @@ class _StyleManagementModalState extends State<_StyleManagementModal> {
         updatedAt: DateTime.now(),
       );
       
-      await DanceStylesService.updateStyle(styleToUpdate.id, updatedStyle);
+      await ClassStylesService.updateStyle(styleToUpdate.id, updatedStyle);
       
       _editStyleController.clear();
       setState(() {
@@ -10120,7 +10343,7 @@ class _StyleManagementModalState extends State<_StyleManagementModal> {
       });
 
       try {
-        await DanceStylesService.deleteStyle(styleName);
+        await ClassStylesService.deleteStyle(styleName);
         widget.onCategoriesUpdated();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -10443,23 +10666,34 @@ class _SubscriptionPlansBottomSheetState extends State<_SubscriptionPlansBottomS
       final amount = (plan['price'] as num).toInt();
       final name = plan['name'] ?? 'Subscription Plan';
       final billingCycle = plan['billingCycle'] ?? 'monthly';
+      final explicitProductId = (plan['storeProductId'] ??
+              plan['productId'] ??
+              plan['playProductId'] ??
+              plan['appStoreProductId'])
+          ?.toString();
+      final productId = IapService.resolveProductId(
+        billingCycle: billingCycle.toString(),
+        explicitId: explicitProductId,
+        planId: planId,
+      );
 
-      // Create payment using existing PaymentService
-      final paymentId = 'sub_${planId}_${DateTime.now().millisecondsSinceEpoch}';
-      final result = await PaymentService.processPayment(
-        paymentId: paymentId,
-        amount: amount,
-        description: '$name - $billingCycle subscription',
-        paymentType: 'subscription',
-        itemId: planId,
+      if (productId.isEmpty) {
+        _showError('Subscription product is not configured yet.');
+        return;
+      }
+
+      final result = await IapService.instance.purchaseSubscription(
+        productId: productId,
         metadata: {
+          'planId': planId,
           'planName': name,
           'billingCycle': billingCycle,
+          'amount': amount,
         },
       );
 
       if (result['success'] == true) {
-        _showSuccess('Subscription activated successfully! All videos are now unlocked.');
+        _showSuccess('Complete the purchase to activate your subscription.');
         Navigator.pop(context);
         // Force refresh of the online screen
         if (mounted) {
@@ -10666,7 +10900,6 @@ class _SubscriptionPlansDialog extends StatefulWidget {
 
 class _SubscriptionPlansDialogState extends State<_SubscriptionPlansDialog> {
   bool _isMonthlyLoading = false;
-  bool _isQuarterlyLoading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -10722,28 +10955,15 @@ class _SubscriptionPlansDialogState extends State<_SubscriptionPlansDialog> {
               ),
               const SizedBox(height: 16),
               
-              // Monthly Plan
+              // Monthly Plan (single plan)
               _PlanCard(
                 name: 'Monthly Plan',
                 price: 900,
                 cycle: 'month',
                 description: 'Access all videos for 1 month',
-                isPopular: false,
-                onSubscribe: () => _handleSubscribe('monthly', 900, 'monthly'),
-                isLoading: _isMonthlyLoading,
-              ),
-              
-              const SizedBox(height: 12),
-              
-              // 3-Month Plan
-              _PlanCard(
-                name: '3-Month Plan',
-                price: 2300,
-                cycle: '3 months',
-                description: 'Access all videos for 3 months',
                 isPopular: true,
-                onSubscribe: () => _handleSubscribe('quarterly', 2300, 'quarterly'),
-                isLoading: _isQuarterlyLoading,
+                onSubscribe: _handleSubscribe,
+                isLoading: _isMonthlyLoading,
               ),
               
               const SizedBox(height: 16),
@@ -10799,19 +11019,11 @@ class _SubscriptionPlansDialogState extends State<_SubscriptionPlansDialog> {
     );
   }
 
-  Future<void> _handleSubscribe(String planType, int amount, String billingCycle) async {
-    // Set appropriate loading state based on plan type
-    if (planType == 'monthly') {
-      if (_isMonthlyLoading) return;
-      setState(() {
-        _isMonthlyLoading = true;
-      });
-    } else {
-      if (_isQuarterlyLoading) return;
-      setState(() {
-        _isQuarterlyLoading = true;
-      });
-    }
+  Future<void> _handleSubscribe() async {
+    if (_isMonthlyLoading) return;
+    setState(() {
+      _isMonthlyLoading = true;
+    });
 
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -10819,49 +11031,27 @@ class _SubscriptionPlansDialogState extends State<_SubscriptionPlansDialog> {
         _showError('Please login to subscribe');
         return;
       }
+      final result = await OnlineSubscriptionService.purchaseMonthly();
 
-      // Generate payment ID
-      final paymentId = 'sub_${DateTime.now().millisecondsSinceEpoch}_${planType}';
-      
-      // Process payment using PaymentService
-      final result = await PaymentService.processPayment(
-        paymentId: paymentId,
-        amount: amount,
-        description: '$planType subscription plan',
-        paymentType: 'subscription',
-        itemId: planType,
-        metadata: {
-          'planType': planType,
-          'billingCycle': billingCycle,
-          'amount': amount,
-        },
-      );
-
-      // Check if payment was initiated successfully (not completed yet)
       if (result['success'] == true) {
-        // Payment gateway opened successfully, close dialog
         if (mounted) {
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Payment gateway opened. Complete payment to unlock videos.'),
-              backgroundColor: Color(0xFF4F46E5),
+            SnackBar(
+              content: Text(result['message'] ?? 'Subscription activated successfully.'),
+              backgroundColor: const Color(0xFF10B981),
             ),
           );
         }
       } else {
-        _showError('Failed to open payment gateway. Please try again.');
+        _showError(result['message'] ?? 'Subscription failed. Please try again.');
       }
     } catch (e) {
       _showError('Payment failed: ${e.toString()}');
     } finally {
       if (mounted) {
         setState(() {
-          if (planType == 'monthly') {
-            _isMonthlyLoading = false;
-          } else {
-            _isQuarterlyLoading = false;
-          }
+          _isMonthlyLoading = false;
         });
       }
     }

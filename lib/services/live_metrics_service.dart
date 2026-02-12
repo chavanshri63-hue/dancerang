@@ -15,6 +15,32 @@ class LiveMetricsService {
         .where('isAvailable', isEqualTo: true)
         .snapshots()
         .asyncMap((snapshot) async {
+      final enrollmentsSnapshot = await _firestore
+          .collection('enrollments')
+          .where('itemType', isEqualTo: 'class')
+          .where('status', isEqualTo: 'enrolled')
+          .get();
+      final Map<String, int> enrollmentCounts = {};
+      if (enrollmentsSnapshot.docs.isNotEmpty) {
+        for (final doc in enrollmentsSnapshot.docs) {
+          final data = doc.data();
+          final itemId = (data['itemId'] ?? '').toString();
+          if (itemId.isEmpty) continue;
+          enrollmentCounts[itemId] = (enrollmentCounts[itemId] ?? 0) + 1;
+        }
+      } else {
+        final classEnrollmentsSnapshot = await _firestore
+            .collection('class_enrollments')
+            .where('status', isEqualTo: 'active')
+            .get();
+        for (final doc in classEnrollmentsSnapshot.docs) {
+          final data = doc.data();
+          final classId = (data['classId'] ?? '').toString();
+          if (classId.isEmpty) continue;
+          enrollmentCounts[classId] = (enrollmentCounts[classId] ?? 0) + 1;
+        }
+      }
+
       int totalEnrollments = 0;
       int totalCapacity = 0;
       int fullyBooked = 0;
@@ -25,38 +51,8 @@ class LiveMetricsService {
         final maxStudents = data['maxStudents'] ?? 20;
         final currentBookings = data['currentBookings'] ?? data['enrolledCount'] ?? 0;
         
-        // If currentBookings is 0, try to get actual enrollment count from enrolments collection
-        int actualEnrollments = currentBookings as int;
-        if (actualEnrollments == 0) {
-          final docId = doc.id;
-          // Prevent concurrent updates for same document
-          if (!_pendingUpdates.contains(docId)) {
-            _pendingUpdates.add(docId);
-            try {
-              final enrollmentSnapshot = await _firestore
-                  .collection('enrollments')
-                  .where('itemId', isEqualTo: docId)
-                  .where('status', isEqualTo: 'enrolled')
-                  .where('itemType', isEqualTo: 'class')
-                  .get();
-              actualEnrollments = enrollmentSnapshot.docs.length;
-              
-              // Update the class document with actual enrollment count (only if still 0 to avoid race)
-              if (actualEnrollments > 0) {
-                await _firestore.collection('classes').doc(docId).update({
-                  'currentBookings': actualEnrollments,
-                  'updatedAt': FieldValue.serverTimestamp(),
-                });
-              }
-            } catch (e) {
-              if (kDebugMode) {
-                print('Error updating enrollment count for class ${docId}: $e');
-              }
-            } finally {
-              _pendingUpdates.remove(docId);
-            }
-          }
-        }
+        int actualEnrollments = enrollmentCounts[doc.id] ??
+            (currentBookings is num ? currentBookings.toInt() : 0);
         
         totalEnrollments += actualEnrollments;
         totalCapacity += maxStudents as int;
@@ -83,46 +79,83 @@ class LiveMetricsService {
   static Stream<Map<String, dynamic>> getLiveRevenueMetrics() {
     return _firestore
         .collection('payments')
-        .where('status', isEqualTo: 'success')
+        .where('status', whereIn: const ['success', 'paid'])
         .snapshots()
         .map((snapshot) {
-      int totalRevenue = 0;
-      int todayRevenue = 0;
-      int thisWeekRevenue = 0;
-      int thisMonthRevenue = 0;
-      int totalTransactions = snapshot.docs.length;
+      int onlineTotal = 0;
+      int onlineToday = 0;
+      int onlineWeek = 0;
+      int onlineMonth = 0;
+      int onlineTransactions = 0;
+      int cashTotal = 0;
+      int cashToday = 0;
+      int cashWeek = 0;
+      int cashMonth = 0;
 
       final now = DateTime.now();
       final todayStart = DateTime(now.year, now.month, now.day);
-      final weekStart = now.subtract(Duration(days: now.weekday - 1));
+      final weekStart = DateTime(now.year, now.month, now.day)
+          .subtract(Duration(days: now.weekday - 1));
       final monthStart = DateTime(now.year, now.month, 1);
 
       for (final doc in snapshot.docs) {
         final data = doc.data();
         final amount = data['amount'] ?? 0;
-        final timestamp = (data['timestamp'] as Timestamp?)?.toDate() ?? 
-                         (data['created_at'] as Timestamp?)?.toDate() ?? now;
+        final timestamp = (data['created_at'] as Timestamp?)?.toDate() ??
+            (data['timestamp'] as Timestamp?)?.toDate() ??
+            (data['updated_at'] as Timestamp?)?.toDate() ??
+            now;
         
-        totalRevenue += amount as int;
+        final method = (data['payment_method'] ?? 'online').toString().toLowerCase();
+        final isCash = method == 'cash';
+        final amt = (amount as num).toInt();
+        if (isCash) {
+          cashTotal += amt;
+        } else {
+          onlineTotal += amt;
+          onlineTransactions += 1;
+        }
         
         if (timestamp.isAfter(todayStart)) {
-          todayRevenue += amount as int;
+          if (isCash) {
+            cashToday += amt;
+          } else {
+            onlineToday += amt;
+          }
         }
         if (timestamp.isAfter(weekStart)) {
-          thisWeekRevenue += amount as int;
+          if (isCash) {
+            cashWeek += amt;
+          } else {
+            onlineWeek += amt;
+          }
         }
         if (timestamp.isAfter(monthStart)) {
-          thisMonthRevenue += amount as int;
+          if (isCash) {
+            cashMonth += amt;
+          } else {
+            onlineMonth += amt;
+          }
         }
       }
 
       return {
-        'totalRevenue': totalRevenue,
-        'todayRevenue': todayRevenue,
-        'thisWeekRevenue': thisWeekRevenue,
-        'thisMonthRevenue': thisMonthRevenue,
-        'totalTransactions': totalTransactions,
-        'averagePayment': totalTransactions > 0 ? (totalRevenue / totalTransactions).round() : 0,
+        'onlineTotal': onlineTotal,
+        'onlineToday': onlineToday,
+        'onlineWeek': onlineWeek,
+        'onlineMonth': onlineMonth,
+        'onlineTransactions': onlineTransactions,
+        'cashTotal': cashTotal,
+        'cashToday': cashToday,
+        'cashWeek': cashWeek,
+        'cashMonth': cashMonth,
+        // Legacy keys for existing screens (online totals)
+        'totalRevenue': onlineTotal,
+        'todayRevenue': onlineToday,
+        'thisWeekRevenue': onlineWeek,
+        'thisMonthRevenue': onlineMonth,
+        'totalTransactions': onlineTransactions,
+        'averagePayment': onlineTransactions > 0 ? (onlineTotal / onlineTransactions).round() : 0,
       };
     });
   }
@@ -215,6 +248,7 @@ class LiveMetricsService {
         final data = doc.data();
         final createdAt = (data['createdAt'] as Timestamp?)?.toDate();
         final lastActive = (data['lastActive'] as Timestamp?)?.toDate();
+        final updatedAt = (data['updatedAt'] as Timestamp?)?.toDate();
         final role = (data['role'] ?? '').toString().toLowerCase();
         
         // Count students specifically
@@ -231,7 +265,8 @@ class LiveMetricsService {
           }
         }
         
-        if (lastActive != null && lastActive.isAfter(now.subtract(const Duration(days: 7)))) {
+        final lastSeen = lastActive ?? updatedAt ?? createdAt;
+        if (lastSeen != null && lastSeen.isAfter(now.subtract(const Duration(days: 7)))) {
           activeUsers++;
         }
       }

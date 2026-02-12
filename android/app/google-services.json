@@ -13,7 +13,12 @@
           "package_name": "com.dancerang.dancerang"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "883197608292-glin76bil4fetu5ke4ktnk5m33nrd2ft.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDcdx0Jm51nCVkbhhxKFHLnRCLgeEejRUI"
@@ -21,7 +26,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "883197608292-glin76bil4fetu5ke4ktnk5m33nrd2ft.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "883197608292-2e7npdvfad99nfmb0v5j33alg97t6ucb.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.dancerang.dancerang"
+              }
+            }
+          ]
         }
       }
     }

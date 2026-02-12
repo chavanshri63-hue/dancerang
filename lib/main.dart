@@ -98,12 +98,15 @@ Future<void> _initializeBackgroundServices() async {
       }
     }
 
-    // Initialize default dance styles
+    // Initialize default styles for classes and online (admin only)
     try {
-      await DanceStylesService.initializeDefaultStyles();
+      if (userRole == 'admin') {
+        await ClassStylesService.initializeDefaultStyles();
+        await OnlineStylesService.initializeDefaultStyles();
+      }
     } catch (e) {
       if (kDebugMode) {
-        print('Error initializing dance styles: $e');
+        print('Error initializing style lists: $e');
       }
     }
 
@@ -118,18 +121,10 @@ Future<void> _initializeBackgroundServices() async {
   });
 }
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } catch (e) {
-    if (kDebugMode) {
-      print('Firebase initialization error: $e');
-    }
-  }
+Future<void> _initializeFirebaseAndServices() async {
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   // Setup FCM background handler
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
@@ -163,8 +158,10 @@ void main() async {
         final userName = userData?['name'] as String? ?? 'User';
         
         // Check if this is first login today (to avoid multiple notifications)
-        final todayStart = DateTime.now();
-        todayStart.subtract(Duration(hours: todayStart.hour, minutes: todayStart.minute, seconds: todayStart.second));
+        // IMPORTANT: DateTime.subtract returns a new instance; it does not mutate.
+        // Use a midnight boundary for "today".
+        final now = DateTime.now();
+        final todayStart = DateTime(now.year, now.month, now.day);
         final welcomeCheck = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -195,25 +192,14 @@ void main() async {
     }
   }
 
-  // Initialize role keys in Firestore immediately (ensure they're always set)
-  try {
-    await FirebaseFirestore.instance
-        .collection('appSettings')
-        .doc('roleKeys')
-        .set({
-      'adminKey': AppConfig.adminKey,
-      'facultyKey': AppConfig.facultyKey,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: false));
-  } catch (e) {
-    if (kDebugMode) {
-      print('Error setting role keys - will use AppConfig defaults: $e');
-    }
-  }
+  // Do not write role keys at startup; configure via admin tools or console.
   
   // Initialize non-critical services in background (lazy loading)
   _initializeBackgroundServices();
-  
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -326,7 +312,7 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const SplashScreen(),
+      home: const FirebaseInitScreen(),
       routes: {
         '/splash': (context) => const SplashScreen(),
         '/login': (context) => const LoginScreen(),
@@ -338,3 +324,61 @@ class MyApp extends StatelessWidget {
   }
 }
 
+class FirebaseInitScreen extends StatefulWidget {
+  const FirebaseInitScreen({super.key});
+
+  @override
+  State<FirebaseInitScreen> createState() => _FirebaseInitScreenState();
+}
+
+class _FirebaseInitScreenState extends State<FirebaseInitScreen> {
+  late Future<void> _initFuture;  @override
+  void initState() {
+    super.initState();
+    _initFuture = _initializeFirebaseAndServices();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _initFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            backgroundColor: Color(0xFF000000),
+            body: Center(
+              child: CircularProgressIndicator(color: Color(0xFFE53935)),
+            ),
+          );
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            backgroundColor: const Color(0xFF000000),
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Startup failed. Tap to retry.',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _initFuture = _initializeFirebaseAndServices();
+                      });
+                    },
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        final user = FirebaseAuth.instance.currentUser;
+        return user == null ? const LoginScreen() : const HomeScreen();
+      },
+    );
+  }
+}

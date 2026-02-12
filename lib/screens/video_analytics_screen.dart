@@ -20,7 +20,6 @@ class _VideoAnalyticsScreenState extends State<VideoAnalyticsScreen> {
   bool _isLoading = true;
   Map<String, dynamic>? _videoData;
   List<Map<String, dynamic>> _viewsHistory = [];
-  List<Map<String, dynamic>> _comments = [];
   List<Map<String, dynamic>> _likes = [];
 
   @override
@@ -56,14 +55,6 @@ class _VideoAnalyticsScreenState extends State<VideoAnalyticsScreen> {
           .orderBy('timestamp')
           .get();
 
-      // Load comments
-      final commentsSnapshot = await FirebaseFirestore.instance
-          .collection('videoComments')
-          .where('videoId', isEqualTo: widget.videoId)
-          .orderBy('createdAt', descending: true)
-          .limit(50)
-          .get();
-
       // Load likes
       final likesSnapshot = await FirebaseFirestore.instance
           .collection('videoLikes')
@@ -77,19 +68,6 @@ class _VideoAnalyticsScreenState extends State<VideoAnalyticsScreen> {
         final timestamp = (data['timestamp'] as Timestamp).toDate();
         final dateKey = '${timestamp.year}-${timestamp.month.toString().padLeft(2, '0')}-${timestamp.day.toString().padLeft(2, '0')}';
         dailyViews[dateKey] = (dailyViews[dateKey] ?? 0) + 1;
-      }
-
-      // Process comments
-      List<Map<String, dynamic>> comments = [];
-      for (var doc in commentsSnapshot.docs) {
-        final data = doc.data();
-        comments.add({
-          'id': doc.id,
-          'userName': data['userName'] ?? 'Anonymous',
-          'comment': data['comment'] ?? '',
-          'createdAt': data['createdAt'],
-          'likes': data['likes'] ?? 0,
-        });
       }
 
       // Process likes
@@ -110,7 +88,6 @@ class _VideoAnalyticsScreenState extends State<VideoAnalyticsScreen> {
             'views': entry.value,
           };
         }).toList();
-        _comments = comments;
         _likes = likes;
         _isLoading = false;
       });
@@ -151,8 +128,7 @@ class _VideoAnalyticsScreenState extends State<VideoAnalyticsScreen> {
                   _buildViewsChart(),
                   const SizedBox(height: 20),
                   
-                  // Comments Section
-                  _buildCommentsSection(),
+                  // Comments section removed
                 ],
               ),
             ),
@@ -220,8 +196,7 @@ class _VideoAnalyticsScreenState extends State<VideoAnalyticsScreen> {
   Widget _buildKeyMetrics() {
     final totalViews = _videoData?['views'] ?? 0;
     final totalLikes = _videoData?['likes'] ?? 0;
-    final totalComments = _comments.length;
-    final engagementRate = totalViews > 0 ? ((totalLikes + totalComments) / totalViews * 100) : 0.0;
+    final engagementRate = totalViews > 0 ? (totalLikes / totalViews * 100) : 0.0;
     
     return GridView.count(
       shrinkWrap: true,
@@ -242,12 +217,6 @@ class _VideoAnalyticsScreenState extends State<VideoAnalyticsScreen> {
           totalLikes.toString(),
           Icons.favorite,
           const Color(0xFFE53935),
-        ),
-        _buildMetricCard(
-          'Comments',
-          totalComments.toString(),
-          Icons.comment,
-          const Color(0xFF10B981),
         ),
         _buildMetricCard(
           'Engagement',
@@ -366,96 +335,4 @@ class _VideoAnalyticsScreenState extends State<VideoAnalyticsScreen> {
     );
   }
 
-  Widget _buildCommentsSection() {
-    return Card(
-      color: Theme.of(context).cardColor,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Recent Comments',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            
-            if (_comments.isEmpty)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Text(
-                    'No comments yet',
-                    style: TextStyle(color: Colors.white70),
-                  ),
-                ),
-              )
-            else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _comments.length,
-                itemBuilder: (context, index) {
-                  final comment = _comments[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundColor: const Color(0xFFE53935),
-                          child: Text(
-                            comment['userName'][0].toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                comment['userName'],
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                comment['comment'],
-                                style: const TextStyle(color: Colors.white70),
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Icon(Icons.favorite, color: Colors.white70, size: 16),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${comment['likes']}',
-                                    style: const TextStyle(color: Colors.white70, fontSize: 12),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
 }

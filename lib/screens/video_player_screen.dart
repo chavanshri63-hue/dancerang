@@ -10,8 +10,8 @@ import '../services/payment_service.dart';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import '../widgets/glassmorphism_app_bar.dart';
-import 'video_comments_screen.dart';
 import 'offline_downloads_screen.dart';
+import 'subscription_plans_screen.dart';
 
 class VideoPlayerScreen extends StatefulWidget {
   final String videoId;
@@ -50,6 +50,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   bool _isPlaying = false;
   bool _isLiked = false;
   bool _isSubscribed = false;
+  bool _isSubscriptionChecked = false;
   Duration _currentPosition = Duration.zero;
   Duration _totalDuration = Duration.zero;
   double _playbackSpeed = 1.0;
@@ -61,12 +62,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   bool _isDownloaded = false;
   http.Client? _downloadClient;
   StreamSubscription<Map<String, dynamic>>? _paymentRefreshSubscription;
+  Timer? _controlsTimer;
 
   @override
   void initState() {
     super.initState();
-    // Check subscription status first before showing UI
-    _checkSubscriptionStatusAndInitialize();
+    // Initialize video and subscription check in parallel to reduce wait time
+    _initializeVideo();
+    _checkSubscriptionStatus();
     _incrementViews();
     _checkIfDownloaded();
     
@@ -74,13 +77,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     _paymentRefreshSubscription = PaymentService.refreshStream.listen((event) {
       if (event['type'] == 'payment_success' && event['paymentType'] == 'subscription' && mounted) {
         // Refresh subscription status when subscription payment succeeds
-        _checkSubscriptionStatusAndInitialize();
+        _checkSubscriptionStatus();
       }
     });
   }
 
 
-  Future<void> _checkSubscriptionStatusAndInitialize() async {
+  Future<void> _checkSubscriptionStatus() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       bool hasActiveSubscription = false;
@@ -112,19 +115,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       if (mounted) {
         setState(() {
           _isSubscribed = hasActiveSubscription;
-          // Keep loading true until video is initialized
+          _isSubscriptionChecked = true;
         });
-        
-        // Skip preload check to avoid additional network calls
-        // Initialize video directly
-        await _initializeVideo();
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _isSubscribed = false;
+          _isSubscriptionChecked = true;
         });
-        await _initializeVideo();
       }
     }
   }
@@ -229,6 +228,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         
         // Start playing immediately
         _controller!.play();
+        _showControls = true;
+        _startControlsHideTimer();
       }
     } catch (e) {
       if (mounted) {
@@ -246,6 +247,44 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         _isInitialized = false;
       });
     }
+  }
+
+  void _startControlsHideTimer() {
+    _controlsTimer?.cancel();
+    _controlsTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      setState(() {
+        _showControls = false;
+      });
+    });
+  }
+
+  void _toggleControls() {
+    setState(() {
+      _showControls = !_showControls;
+    });
+    if (_showControls) {
+      _startControlsHideTimer();
+    } else {
+      _controlsTimer?.cancel();
+    }
+  }
+
+  Widget _buildVideoSurface() {
+    if (_controller == null) return Container();
+    // Slightly reduce brightness and add a touch of contrast for accuracy.
+    const contrast = 1.05;
+    const brightness = 0.92;
+    const t = (brightness - 1.0) * 255.0;
+    return ColorFiltered(
+      colorFilter: const ColorFilter.matrix([
+        contrast, 0, 0, 0, t,
+        0, contrast, 0, 0, t,
+        0, 0, contrast, 0, t,
+        0, 0, 0, 1, 0,
+      ]),
+      child: VideoPlayer(_controller!),
+    );
   }
 
   // Fallback method to check subscription without timeout
@@ -543,6 +582,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 label: 'View',
                 textColor: Colors.white,
                 onPressed: () {
+                  if (!mounted) return;
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -637,6 +677,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   @override
   void dispose() {
     _paymentRefreshSubscription?.cancel();
+    _controlsTimer?.cancel();
     _downloadClient?.close();
     if (_controller != null) {
       try {
@@ -666,6 +707,30 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               SizedBox(height: 16),
               Text(
                 'Loading video...',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (widget.isPaidContent && !_isSubscriptionChecked) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                color: Color(0xFFE53935),
+              ),
+              SizedBox(height: 16),
+              Text(
+                'Checking access...',
                 style: TextStyle(
                   color: Colors.white70,
                   fontSize: 16,
@@ -805,8 +870,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: () {
-                          Navigator.pop(context);
-                          // Navigate to subscription plans
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const SubscriptionPlansScreen(),
+                            ),
+                          );
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFE53935),
@@ -837,18 +906,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   Widget _buildFullscreenVideo() {
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _showControls = !_showControls;
-        });
-      },
+      onTap: _toggleControls,
       child: Stack(
         children: [
           // Fullscreen Video Player
           Center(
             child: AspectRatio(
               aspectRatio: _controller?.value.aspectRatio ?? 16/9,
-              child: _controller != null ? VideoPlayer(_controller!) : Container(),
+              child: _buildVideoSurface(),
             ),
           ),
           
@@ -870,9 +935,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Colors.black.withOpacity(0.3),
+                      Colors.black.withOpacity(0.15),
                       Colors.transparent,
-                      Colors.black.withOpacity(0.7),
+                      Colors.black.withOpacity(0.5),
                     ],
                   ),
                 ),
@@ -1052,18 +1117,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   Widget _buildVideoPlayer() {
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _showControls = !_showControls;
-        });
-      },
+      onTap: _toggleControls,
       child: Stack(
         children: [
           // Video Player
           Center(
             child: AspectRatio(
               aspectRatio: _controller?.value.aspectRatio ?? 16/9,
-              child: _controller != null ? VideoPlayer(_controller!) : Container(),
+              child: _buildVideoSurface(),
             ),
           ),
           
@@ -1111,9 +1172,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Colors.black.withOpacity(0.3),
+                      Colors.black.withOpacity(0.15),
                       Colors.transparent,
-                      Colors.black.withOpacity(0.7),
+                      Colors.black.withOpacity(0.5),
                     ],
                   ),
                 ),

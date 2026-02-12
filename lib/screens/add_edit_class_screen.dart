@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/dance_styles_service.dart';
+import '../services/branches_service.dart';
 import '../services/event_controller.dart';
 import '../services/live_notification_service.dart';
 
@@ -18,11 +19,11 @@ class _AddEditClassScreenState extends State<AddEditClassScreen> {
   final _name = TextEditingController();
   final _instructor = TextEditingController();
   final _price = TextEditingController();
-  final _studio = TextEditingController();
   final _spot = TextEditingController();
   final _numberOfSessions = TextEditingController();
   String _level = 'Beginner';
   String _category = 'Bollywood';
+  String _selectedBranch = '';
   String _ageGroup = 'kids'; // 'kids' | 'adults'
   String _selectedFacultyId = '';
   String _selectedFacultyName = '';
@@ -36,6 +37,7 @@ class _AddEditClassScreenState extends State<AddEditClassScreen> {
   final _levels = const ['Beginner', 'Intermediate', 'Advanced'];
   final _ageGroups = const ['kids', 'adults'];
   List<String> _categories = [];
+  List<String> _branches = [];
   final _days = const ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   bool _loading = false;
@@ -46,6 +48,7 @@ class _AddEditClassScreenState extends State<AddEditClassScreen> {
     super.initState();
     _loadFacultyList();
     _loadCategories();
+    _loadBranches();
     _checkCurrentUserRole();
   }
 
@@ -54,7 +57,6 @@ class _AddEditClassScreenState extends State<AddEditClassScreen> {
     _name.dispose();
     _instructor.dispose();
     _price.dispose();
-    _studio.dispose();
     _spot.dispose();
     _numberOfSessions.dispose();
     super.dispose();
@@ -84,7 +86,7 @@ class _AddEditClassScreenState extends State<AddEditClassScreen> {
 
   Future<void> _loadCategories() async {
     try {
-      final danceStyles = await DanceStylesService.getAllStyles();
+      final danceStyles = await ClassStylesService.getAllStyles();
       // Extract names and normalize, trim, and dedupe case-insensitively
       final seen = <String>{};
       _categories = danceStyles
@@ -103,6 +105,35 @@ class _AddEditClassScreenState extends State<AddEditClassScreen> {
     } catch (e) {
       // Fallback to default categories
       _categories = ['Bollywood', 'Hip Hop', 'Contemporary', 'Jazz', 'Ballet', 'Salsa'];
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _loadBranches() async {
+    try {
+      await BranchesService.initializeDefaultBranches();
+      final branches = await BranchesService.getAllBranches();
+      final seen = <String>{};
+      _branches = branches
+          .map((branch) => branch.name.trim())
+          .where((e) => e.isNotEmpty)
+          .map((e) => e[0].toUpperCase() + e.substring(1))
+          .where((e) => seen.add(e.toLowerCase()))
+          .toList();
+      final classSnapshot = await FirebaseFirestore.instance.collection('classes').get();
+      for (final doc in classSnapshot.docs) {
+        final studio = (doc.data()['studio'] ?? '').toString().trim();
+        if (studio.isNotEmpty && seen.add(studio.toLowerCase())) {
+          _branches.add(studio);
+        }
+      }
+      _branches.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      if (_selectedBranch.isEmpty || !_branches.contains(_selectedBranch)) {
+        _selectedBranch = _branches.isNotEmpty ? _branches.first : '';
+      }
+      if (mounted) setState(() {});
+    } catch (e) {
+      _branches = [];
       if (mounted) setState(() {});
     }
   }
@@ -158,7 +189,7 @@ class _AddEditClassScreenState extends State<AddEditClassScreen> {
                     updatedAt: now,
                   );
                   
-                  await DanceStylesService.addStyle(newStyle);
+                  await ClassStylesService.addStyle(newStyle);
                   // Reload categories and select the new style
                   await _loadCategories();
                   setState(() {
@@ -180,6 +211,80 @@ class _AddEditClassScreenState extends State<AddEditClassScreen> {
               foregroundColor: Colors.white,
             ),
             child: const Text('Add Style'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAddBranchDialog() async {
+    final TextEditingController branchController = TextEditingController();
+
+    await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1B1B1B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Add New Branch', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: branchController,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: 'Branch Name',
+                labelStyle: const TextStyle(color: Colors.white70),
+                filled: true,
+                fillColor: const Color(0xFF2B2B2B),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFF404040)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final branchName = branchController.text.trim();
+              if (branchName.isNotEmpty) {
+                try {
+                  final now = DateTime.now();
+                  final newBranch = Branch(
+                    id: '',
+                    name: branchName,
+                    isActive: true,
+                    priority: 0,
+                    createdAt: now,
+                    updatedAt: now,
+                  );
+                  await BranchesService.addBranch(newBranch);
+                  await _loadBranches();
+                  setState(() {
+                    _selectedBranch = branchName;
+                  });
+                  if (mounted) Navigator.pop(context, true);
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to add branch: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE53935),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Add Branch'),
           ),
         ],
       ),
@@ -235,7 +340,7 @@ class _AddEditClassScreenState extends State<AddEditClassScreen> {
               const SizedBox(height: 12),
               _field(_price, 'Price (₹)', Icons.currency_rupee, keyboardType: TextInputType.number, validator: (v)=> v==null||v.trim().isEmpty? 'Required': null),
               const SizedBox(height: 12),
-              _field(_studio, 'Studio', Icons.location_city, validator: (v)=> v==null||v.trim().isEmpty? 'Required': null),
+              _dropdown('Branch', _branches, _selectedBranch, (v)=> setState(()=> _selectedBranch = v ?? '')),
               const SizedBox(height: 12),
               // Removed Available Spots field as requested
               const SizedBox.shrink(),
@@ -311,10 +416,23 @@ class _AddEditClassScreenState extends State<AddEditClassScreen> {
                   ],
                 ),
               ),
+            if (label == 'Branch')
+              const DropdownMenuItem(
+                value: 'ADD_NEW_BRANCH',
+                child: Row(
+                  children: [
+                    const Icon(Icons.add, color: Color(0xFFE53935), size: 16),
+                    const SizedBox(width: 8),
+                    const Text('Add New Branch', style: TextStyle(color: Color(0xFFE53935))),
+                  ],
+                ),
+              ),
           ],
           onChanged: (String? newValue) {
             if (newValue == 'ADD_NEW_STYLE') {
               _showAddStyleDialog();
+            } else if (newValue == 'ADD_NEW_BRANCH') {
+              _showAddBranchDialog();
             } else {
               onChanged(newValue);
             }
@@ -461,6 +579,15 @@ class _AddEditClassScreenState extends State<AddEditClassScreen> {
       );
       return;
     }
+    if (_selectedBranch.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a branch for the class'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
     
     setState(()=> _loading = true);
     try {
@@ -481,7 +608,7 @@ class _AddEditClassScreenState extends State<AddEditClassScreen> {
         'instructorId': _isManualInstructorEntry ? null : _selectedFacultyId,
         'isManualInstructor': _isManualInstructorEntry,
         'price': '₹${_price.text.trim()}',
-        'studio': _studio.text.trim(),
+        'studio': _selectedBranch,
         'availableSpots': int.tryParse(_spot.text.trim()) ?? 0,
         'level': _level,
         'category': _category,

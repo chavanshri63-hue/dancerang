@@ -53,6 +53,10 @@ class DanceClass {
   });
 
   factory DanceClass.fromMap(Map<String, dynamic> map) {
+    String _stringValue(dynamic value, String fallback) {
+      if (value == null) return fallback;
+      return value.toString();
+    }
     // Handle old format (dateTime)
     DateTime? resolvedDateTime;
     final dynamic rawDateTime = map['dateTime'];
@@ -86,15 +90,15 @@ class DanceClass {
 
     return DanceClass(
       id: map['id'] ?? '',
-      name: map['name'] ?? '',
-      instructor: map['instructor'] ?? map['instructorName'] ?? '', // Support both fields
-      description: map['description'] ?? '',
-      category: map['category'] ?? '',
-      level: map['level'] ?? 'Beginner',
-      duration: map['duration'] ?? '60 minutes',
-      price: map['price'] ?? '₹500',
-      studio: map['studio'] ?? '',
-      imageUrl: map['imageUrl'] ?? '',
+      name: _stringValue(map['name'], ''),
+      instructor: _stringValue(map['instructor'] ?? map['instructorName'], ''), // Support both fields
+      description: _stringValue(map['description'], ''),
+      category: _stringValue(map['category'], ''),
+      level: _stringValue(map['level'], 'Beginner'),
+      duration: _stringValue(map['duration'], '60 minutes'),
+      price: _stringValue(map['price'], '₹500'),
+      studio: _stringValue(map['studio'], ''),
+      imageUrl: _stringValue(map['imageUrl'], ''),
       ageGroup: map['ageGroup']?.toString(),
       dateTime: resolvedDateTime, // Old format
       days: days, // New format
@@ -107,11 +111,14 @@ class DanceClass {
       availableSpots: map['availableSpots'] ?? map['maxStudents'] ?? 20,
       isAvailable: map['isAvailable'] ?? true,
       numberOfSessions: map['numberOfSessions'] != null ? (map['numberOfSessions'] as num).toInt() : null,
-      requirements: List<String>.from(map['requirements'] ?? []),
+      requirements: (map['requirements'] as List<dynamic>? ?? [])
+          .map((r) => r?.toString() ?? '')
+          .where((r) => r.isNotEmpty)
+          .toList(),
       schedule: Map<String, dynamic>.from(map['schedule'] ?? {}),
       packages: (map['packages'] as List<dynamic>? ?? [])
-          .where((p) => p != null) // Filter out null packages
-          .map((p) => ClassPackage.fromMap(Map<String, dynamic>.from(p)))
+          .where((p) => p is Map)
+          .map((p) => ClassPackage.fromMap(Map<String, dynamic>.from(p as Map)))
           .toList(),
     );
   }

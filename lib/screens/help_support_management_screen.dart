@@ -142,8 +142,8 @@ class _HelpSupportManagementScreenState extends State<HelpSupportManagementScree
         'phone': '+91 99999 99999',
         'email': 'support@dancerang.com',
         'studioLocation': 'https://maps.google.com?q=DanceRang%20Studio',
-        'privacyPolicy': 'https://dancerang.com/privacy',
-        'termsOfService': 'https://dancerang.com/terms',
+        'privacyPolicy': 'https://dancerang.com/privacy-policy',
+        'termsOfService': 'https://dancerang.com/terms-of-service',
         'website': 'https://dancerang.com',
         'lastUpdated': FieldValue.serverTimestamp(),
       });
@@ -215,9 +215,9 @@ class _HelpSupportManagementScreenState extends State<HelpSupportManagementScree
                     [
                       _buildTextField('Studio Location', _studioLocationController, Icons.location_on, hintText: 'e.g., https://maps.google.com?q=DanceRang%20Studio'),
                       const SizedBox(height: 12),
-                      _buildTextField('Privacy Policy URL', _privacyPolicyController, Icons.privacy_tip_outlined, hintText: 'e.g., https://dancerang.com/privacy'),
+                      _buildTextField('Privacy Policy URL', _privacyPolicyController, Icons.privacy_tip_outlined, hintText: 'e.g., https://dancerang.com/privacy-policy'),
                       const SizedBox(height: 12),
-                      _buildTextField('Terms of Service URL', _termsController, Icons.description_outlined, hintText: 'e.g., https://dancerang.com/terms'),
+                      _buildTextField('Terms of Service URL', _termsController, Icons.description_outlined, hintText: 'e.g., https://dancerang.com/terms-of-service'),
                       const SizedBox(height: 12),
                       _buildTextField('Website URL', _websiteController, Icons.language, hintText: 'e.g., https://dancerang.com'),
                     ],

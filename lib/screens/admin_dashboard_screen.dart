@@ -9,7 +9,7 @@ import '../services/app_config_service.dart';
 import 'admin_background_management_screen.dart';
 import 'notifications_screen.dart';
 import 'student_management_screen.dart';
-import 'add_faculty_screen.dart';
+import 'faculty_management_screen.dart';
 import 'my_workshops_screen.dart';
 import 'gallery_screen.dart';
 import 'updates_screen.dart';
@@ -23,6 +23,7 @@ import 'admin_finance_collections_screen.dart';
 import 'admin_online_management_screen.dart';
 import '../models/banner_model.dart';
 import '../services/admin_service.dart';
+import '../services/branches_service.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -102,7 +103,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
         const SizedBox(height: 12),
 
-        // Enrollment metrics
+        // Cash revenue metrics
         Card(
           elevation: 8,
           shadowColor: Colors.black.withValues(alpha: 0.1),
@@ -114,39 +115,38 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: StreamBuilder<Map<String, dynamic>>(
-              stream: LiveMetricsService.getLiveEnrollmentMetrics(),
+              stream: LiveMetricsService.getLiveRevenueMetrics(),
               builder: (context, snapshot) {
                 final metrics = snapshot.data ?? const {
-                  'totalEnrollments': 0,
-                  'totalCapacity': 0,
-                  'occupancyRate': 0,
-                  'fullyBooked': 0,
-                  'availableSpots': 0,
+                  'cashToday': 0,
+                  'cashWeek': 0,
+                  'cashMonth': 0,
+                  'cashTotal': 0,
                 };
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: const [
-                        Icon(Icons.school, color: Colors.white70, size: 18),
+                        Icon(Icons.payments_outlined, color: Colors.white70, size: 18),
                         SizedBox(width: 8),
-                        Text('Classes Enrollment', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
+                        Text('Cash Revenue', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
                       ],
                     ),
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        Expanded(child: _metricTile('Enrollments', '${metrics['totalEnrollments']}', const Color(0xFF42A5F5))),
+                        Expanded(child: _metricTile('Today', '₹${metrics['cashToday']}', const Color(0xFF42A5F5))),
                         const SizedBox(width: 12),
-                        Expanded(child: _metricTile('Occupancy', '${metrics['occupancyRate']}%', const Color(0xFF10B981))),
+                        Expanded(child: _metricTile('Week', '₹${metrics['cashWeek']}', const Color(0xFF10B981))),
                       ],
                     ),
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        Expanded(child: _metricTile('Capacity', '${metrics['totalCapacity']}', const Color(0xFFFFB300))),
+                        Expanded(child: _metricTile('Month', '₹${metrics['cashMonth']}', const Color(0xFFFFB300))),
                         const SizedBox(width: 12),
-                        Expanded(child: _metricTile('Available', '${metrics['availableSpots']}', const Color(0xFF4F46E5))),
+                        Expanded(child: _metricTile('Total', '₹${metrics['cashTotal']}', const Color(0xFF4F46E5))),
                       ],
                     ),
                   ],
@@ -158,7 +158,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
         const SizedBox(height: 12),
 
-        // Revenue metrics
+        // Online revenue metrics
         Card(
           elevation: 8,
           shadowColor: Colors.black.withValues(alpha: 0.1),
@@ -173,12 +173,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               stream: LiveMetricsService.getLiveRevenueMetrics(),
               builder: (context, snapshot) {
                 final m = snapshot.data ?? const {
-                  'totalRevenue': 0,
-                  'todayRevenue': 0,
-                  'thisWeekRevenue': 0,
-                  'thisMonthRevenue': 0,
-                  'totalTransactions': 0,
-                  'averagePayment': 0,
+                  'onlineTotal': 0,
+                  'onlineToday': 0,
+                  'onlineWeek': 0,
+                  'onlineMonth': 0,
                 };
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -187,23 +185,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       children: const [
                         Icon(Icons.currency_rupee, color: Colors.white70, size: 18),
                         SizedBox(width: 8),
-                        Text('Revenue Analytics', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
+                        Text('Online Revenue', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
                       ],
                     ),
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        Expanded(child: _metricTile('Today', '₹${m['todayRevenue']}', const Color(0xFF10B981))),
+                        Expanded(child: _metricTile('Today', '₹${m['onlineToday']}', const Color(0xFF10B981))),
                         const SizedBox(width: 12),
-                        Expanded(child: _metricTile('Week', '₹${m['thisWeekRevenue']}', const Color(0xFF42A5F5))),
+                        Expanded(child: _metricTile('Week', '₹${m['onlineWeek']}', const Color(0xFF42A5F5))),
                       ],
                     ),
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        Expanded(child: _metricTile('Month', '₹${m['thisMonthRevenue']}', const Color(0xFFFFB300))),
+                        Expanded(child: _metricTile('Month', '₹${m['onlineMonth']}', const Color(0xFFFFB300))),
                         const SizedBox(width: 12),
-                        Expanded(child: _metricTile('Total', '₹${m['totalRevenue']}', const Color(0xFFE53935))),
+                        Expanded(child: _metricTile('Total', '₹${m['onlineTotal']}', const Color(0xFFE53935))),
                       ],
                     ),
                   ],
@@ -331,13 +329,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection('payments')
-              .where('status', isEqualTo: 'success')
+              .where('status', whereIn: ['success', 'paid'])
               .snapshots(),
           builder: (context, snapshot) {
             int total = 0;
             for (final d in snapshot.data?.docs ?? []) {
               final data = d.data() as Map<String, dynamic>;
-              total += (data['amount'] ?? 0) as int;
+              total += (data['amount'] ?? 0) is num ? (data['amount'] as num).toInt() : 0;
             }
             return _statCard('Total Collections', '₹$total', Icons.payments, const Color(0xFF10B981));
           },
@@ -355,11 +353,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               final count = primaryCount;
               return _statCard('Total Enrollments', '$count', Icons.school_outlined, const Color(0xFF9C27B0));
             }
-            // Fallback to legacy collection if primary is empty
+            // Fallback to class enrollments if primary is empty
             return StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
-                  .collection('enrollments')
-                  .where('status', isEqualTo: 'enrolled')
+                  .collection('class_enrollments')
+                  .where('status', isEqualTo: 'active')
                   .snapshots(),
               builder: (context, legacy) {
                 final count = legacy.data?.size ?? 0;
@@ -535,7 +533,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   void _navigateToFaculty() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const AddFacultyScreen()),
+      MaterialPageRoute(builder: (context) => const FacultyManagementScreen()),
     );
   }
 
@@ -896,6 +894,14 @@ class _StudioManagementDialog extends StatelessWidget {
             
             _buildStudioControl(
               context,
+              'Studio Branches',
+              'Add or manage studio branches',
+              Icons.location_on,
+              () => _editStudioBranches(context),
+            ),
+            
+            _buildStudioControl(
+              context,
               'Contact Info',
               'Phone, WhatsApp, Email',
               Icons.contact_phone,
@@ -1026,6 +1032,14 @@ class _StudioManagementDialog extends StatelessWidget {
     );
   }
 
+  void _editStudioBranches(BuildContext context) {
+    Navigator.pop(context);
+    showDialog(
+      context: context,
+      builder: (context) => const _StudioBranchesDialog(),
+    );
+  }
+
   void _editContactInfo(BuildContext context) {
     Navigator.pop(context);
     showDialog(
@@ -1053,6 +1067,134 @@ class _ControlItem {
 }
 
 // Studio Management Dialogs
+class _StudioBranchesDialog extends StatefulWidget {
+  const _StudioBranchesDialog();
+
+  @override
+  State<_StudioBranchesDialog> createState() => _StudioBranchesDialogState();
+}
+
+class _StudioBranchesDialogState extends State<_StudioBranchesDialog> {
+  final TextEditingController _branchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Ensure default branches exist
+    // ignore: discarded_futures
+    BranchesService.initializeDefaultBranches();
+  }
+
+  @override
+  void dispose() {
+    _branchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _addBranch() async {
+    final name = _branchController.text.trim();
+    if (name.isEmpty) return;
+    try {
+      final now = DateTime.now();
+      await BranchesService.addBranch(
+        Branch(
+          id: '',
+          name: name,
+          isActive: true,
+          priority: 0,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      _branchController.clear();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Branch "$name" added'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to add branch: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF1B1B1B),
+      title: const Text('Studio Branches', style: TextStyle(color: Colors.white)),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _branchController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'New Branch Name',
+                labelStyle: TextStyle(color: Colors.white70),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _addBranch,
+                icon: const Icon(Icons.add),
+                label: const Text('Add Branch'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE53935),
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 240,
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: FirebaseFirestore.instance
+                    .collection('branches')
+                    .orderBy('name')
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator(color: Colors.white70));
+                  }
+                  final docs = snapshot.data?.docs ?? [];
+                  if (docs.isEmpty) {
+                    return const Center(child: Text('No branches yet', style: TextStyle(color: Colors.white70)));
+                  }
+                  return ListView.separated(
+                    itemCount: docs.length,
+                    separatorBuilder: (_, __) => const Divider(color: Color(0xFF333333)),
+                    itemBuilder: (context, index) {
+                      final data = docs[index].data();
+                      final name = (data['name'] ?? '').toString();
+                      return ListTile(
+                        title: Text(name, style: const TextStyle(color: Colors.white)),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close', style: TextStyle(color: Colors.white70)),
+        ),
+      ],
+    );
+  }
+}
+
 class _StudioPricingDialog extends StatefulWidget {
   @override
   _StudioPricingDialogState createState() => _StudioPricingDialogState();

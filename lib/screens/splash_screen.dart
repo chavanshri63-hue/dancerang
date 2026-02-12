@@ -84,6 +84,7 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<double> _scaleAnimation;
   late AnimationController _progressController;
   late Animation<double> _progressAnimation;
+  bool _navigated = false;
 
   @override
   void initState() {
@@ -127,25 +128,36 @@ class _SplashScreenState extends State<SplashScreen>
       curve: Curves.easeInOut,
     );
     _progressController.forward();
+
+    // Failsafe: never stay on splash longer than 6 seconds
+    Future.delayed(const Duration(seconds: 6), () {
+      if (mounted && !_navigated) {
+        _safeNavigate(const LoginScreen());
+      }
+    });
+  }
+
+  void _safeNavigate(Widget next) {
+    if (_navigated || !mounted) return;
+    _navigated = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => next),
+      );
+    });
   }
 
   void _navigateAfterDelay() async {
     await Future.delayed(const Duration(seconds: 3));
-    
-    if (mounted) {
-      // Check if user is already logged in
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-        );
-      } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
-      }
+    if (!mounted) return;
+    // Check if user is already logged in
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      _safeNavigate(const HomeScreen());
+    } else {
+      _safeNavigate(const LoginScreen());
     }
   }
 

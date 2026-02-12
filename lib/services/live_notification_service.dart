@@ -14,6 +14,14 @@ class LiveNotificationService {
   // Track recently shown notifications to prevent duplicates
   static final Map<String, DateTime> _recentNotifications = {};
 
+  /// Local notifications should only be shown on the target user's own device.
+  /// Otherwise (e.g. admin approving someone else), we'd show the student's
+  /// message on admin's phone.
+  static bool _isCurrentUser(String userId) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    return uid != null && uid == userId;
+  }
+
   static Future<void> initialize() async {
     if (_initialized) {
       return;
@@ -386,8 +394,8 @@ class LiveNotificationService {
     final title = '✅ Successfully Enrolled!';
     final body = 'You\'re now enrolled in "$itemName" $itemType';
     
-    // Always try to show notification
-    {
+    // Show local notification ONLY if this device belongs to the target user.
+    if (_isCurrentUser(userId)) {
       const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
         'enrollments',
         'Enrollment Updates',
@@ -846,18 +854,21 @@ class LiveNotificationService {
         iOS: iosDetails,
       );
 
-      try {
-        final notificationId = DateTime.now().millisecondsSinceEpoch % 2147483647;
-        await _notifications.show(
-          notificationId,
-          title,
-          body,
-          notificationDetails,
-          payload: 'cash_payment_request',
-        );
-    } catch (e) {
-      // Ignore notification errors
-    }
+      // Show local notification only on the target user's own device.
+      if (_isCurrentUser(userId)) {
+        try {
+          final notificationId = DateTime.now().millisecondsSinceEpoch % 2147483647;
+          await _notifications.show(
+            notificationId,
+            title,
+            body,
+            notificationDetails,
+            payload: 'cash_payment_request',
+          );
+        } catch (e) {
+          // Ignore notification errors
+        }
+      }
 
     // Save to Firestore
     try {
@@ -926,17 +937,20 @@ class LiveNotificationService {
       iOS: iosDetails,
     );
 
-    try {
-      final notificationId = DateTime.now().millisecondsSinceEpoch % 2147483647;
-      await _notifications.show(
-        notificationId,
-        title,
-        body,
-        notificationDetails,
-        payload: isApproved ? 'approval_approved' : 'approval_rejected',
-      );
-    } catch (e) {
-      // Ignore notification errors
+    // Show local notification only on the target user's own device.
+    if (_isCurrentUser(userId)) {
+      try {
+        final notificationId = DateTime.now().millisecondsSinceEpoch % 2147483647;
+        await _notifications.show(
+          notificationId,
+          title,
+          body,
+          notificationDetails,
+          payload: isApproved ? 'approval_approved' : 'approval_rejected',
+        );
+      } catch (e) {
+        // Ignore notification errors
+      }
     }
 
     // Save to Firestore

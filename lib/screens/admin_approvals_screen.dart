@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../widgets/glassmorphism_app_bar.dart';
 import '../services/payment_service.dart';
-import '../services/live_notification_service.dart';
 
 class AdminApprovalsScreen extends StatefulWidget {
   const AdminApprovalsScreen({super.key});
@@ -14,6 +14,30 @@ class AdminApprovalsScreen extends StatefulWidget {
 
 class _AdminApprovalsScreenState extends State<AdminApprovalsScreen> {
   String _selectedFilter = 'all'; // 'all', 'cash_payment', 'workshop', 'banner'
+  final Map<String, String> _userNameCache = {};
+
+  Future<void> _sendUserNotification({
+    required String userId,
+    required String title,
+    required String body,
+    String type = 'general',
+    String priority = 'high',
+    Map<String, dynamic>? data,
+  }) async {
+    try {
+      final functions = FirebaseFunctions.instanceFor(region: 'asia-south1');
+      await functions.httpsCallable('sendUserNotification').call({
+        'userId': userId,
+        'title': title,
+        'body': body,
+        'type': type,
+        'priority': priority,
+        if (data != null) 'data': data,
+      });
+    } catch (_) {
+      // Best-effort; core approval/enrollment should not fail due to push issues.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -154,6 +178,19 @@ class _AdminApprovalsScreenState extends State<AdminApprovalsScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
+                      if (type == 'cash_payment' && userId != null && userId.trim().isNotEmpty)
+                        FutureBuilder<String>(
+                          future: _getUserName(userId),
+                          builder: (context, snap) {
+                            final name = (snap.data ?? '').trim();
+                            return Text(
+                              name.isEmpty ? 'Student: —' : 'Student: $name',
+                              style: const TextStyle(color: Colors.white70, fontSize: 13),
+                            );
+                          },
+                        ),
+                      if (type == 'cash_payment' && userId != null && userId.trim().isNotEmpty)
+                        const SizedBox(height: 4),
                       Text(
                         message,
                         style: const TextStyle(color: Colors.white70, fontSize: 14),
@@ -197,6 +234,21 @@ class _AdminApprovalsScreenState extends State<AdminApprovalsScreen> {
         ),
       ),
     );
+  }
+
+  Future<String> _getUserName(String userId) async {
+    final cached = _userNameCache[userId];
+    if (cached != null) return cached;
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      final data = doc.data() ?? {};
+      final name = (data['name'] ?? data['displayName'] ?? data['fullName'] ?? '').toString().trim();
+      _userNameCache[userId] = name;
+      return name;
+    } catch (_) {
+      _userNameCache[userId] = '';
+      return '';
+    }
   }
 
   Color _getTypeColor(String type) {
@@ -278,17 +330,18 @@ class _AdminApprovalsScreenState extends State<AdminApprovalsScreen> {
       } else {
         // Send approval notification for other types
         if (userId != null) {
-          try {
-            final description = data['message'] as String? ?? data['title'] as String? ?? 'Request';
-            await LiveNotificationService.sendApprovalNotification(
-              userId: userId,
-              type: type,
-              description: description,
-              isApproved: true,
-            );
-          } catch (e) {
-            // Ignore notification errors
-          }
+          final description = data['message'] as String? ?? data['title'] as String? ?? 'Request';
+          await _sendUserNotification(
+            userId: userId,
+            title: '✅ Request Approved!',
+            body: 'Your $type request for "$description" has been approved!',
+            type: 'approval_approved',
+            data: {
+              'approvalType': type,
+              'description': description,
+              'status': 'approved',
+            },
+          );
         }
       }
 
@@ -325,6 +378,7 @@ class _AdminApprovalsScreenState extends State<AdminApprovalsScreen> {
           .doc(paymentId)
           .update({
         'status': 'success',
+        'payment_method': 'cash',
         'updated_at': FieldValue.serverTimestamp(),
       });
 
@@ -386,6 +440,15 @@ class _AdminApprovalsScreenState extends State<AdminApprovalsScreen> {
         paymentType: 'event_choreography',
         itemId: bookingId,
         userId: userId,
+      );
+
+      // Notify student (push + in-app)
+      await _sendUserNotification(
+        userId: userId,
+        title: '✅ Booking Confirmed!',
+        body: 'Your event choreography booking is confirmed.',
+        type: 'event_choreography',
+        data: {'bookingId': bookingId, 'paymentId': paymentId},
       );
 
 
@@ -563,16 +626,14 @@ class _AdminApprovalsScreenState extends State<AdminApprovalsScreen> {
         userId: userId,
       );
 
-      // Send enrollment notification
-      try {
-        await LiveNotificationService.sendEnrollmentNotification(
-          itemName: className,
-          itemType: 'class',
-          userId: userId,
-        );
-      } catch (e) {
-        // Ignore notification errors
-      }
+      // Notify student (push + in-app) after cash approval enrollment
+      await _sendUserNotification(
+        userId: userId,
+        title: '✅ Successfully Enrolled!',
+        body: 'You\'re now enrolled in "$className" class',
+        type: 'enrollment',
+        data: {'itemType': 'class', 'itemId': classId, 'itemName': className},
+      );
       
     } catch (e) {
       rethrow;
@@ -676,16 +737,14 @@ class _AdminApprovalsScreenState extends State<AdminApprovalsScreen> {
         userId: userId,
       );
 
-      // Send enrollment notification
-      try {
-        await LiveNotificationService.sendEnrollmentNotification(
-          itemName: workshopName,
-          itemType: 'workshop',
-          userId: userId,
-        );
-      } catch (e) {
-        // Ignore notification errors
-      }
+      // Notify student (push + in-app) after cash approval workshop enrollment
+      await _sendUserNotification(
+        userId: userId,
+        title: '✅ Successfully Enrolled!',
+        body: 'You\'re now enrolled in "$workshopName" workshop',
+        type: 'enrollment',
+        data: {'itemType': 'workshop', 'itemId': workshopId, 'itemName': workshopName},
+      );
 
 
     } catch (e) {
@@ -706,6 +765,15 @@ class _AdminApprovalsScreenState extends State<AdminApprovalsScreen> {
         'paymentId': paymentId,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+
+      // Notify student (push + in-app)
+      await _sendUserNotification(
+        userId: userId,
+        title: '✅ Studio Booking Confirmed!',
+        body: 'Your studio booking is confirmed.',
+        type: 'studio_booking',
+        data: {'bookingId': bookingId, 'paymentId': paymentId},
+      );
 
 
     } catch (e) {
@@ -746,18 +814,19 @@ class _AdminApprovalsScreenState extends State<AdminApprovalsScreen> {
       final approvalDataMap = approvalData.data();
       final userId = approvalDataMap?['user_id'] as String?;
       if (userId != null) {
-        try {
-          final type = approvalDataMap?['type'] as String? ?? 'request';
-          final description = approvalDataMap?['message'] as String? ?? approvalDataMap?['title'] as String? ?? 'Request';
-          await LiveNotificationService.sendApprovalNotification(
-            userId: userId,
-            type: type,
-            description: description,
-            isApproved: false,
-          );
-        } catch (e) {
-          // Ignore notification errors
-        }
+        final type = approvalDataMap?['type'] as String? ?? 'request';
+        final description = approvalDataMap?['message'] as String? ?? approvalDataMap?['title'] as String? ?? 'Request';
+        await _sendUserNotification(
+          userId: userId,
+          title: '❌ Request Rejected',
+          body: 'Your $type request for "$description" has been rejected.',
+          type: 'approval_rejected',
+          data: {
+            'approvalType': type,
+            'description': description,
+            'status': 'rejected',
+          },
+        );
       }
 
       if (mounted) {

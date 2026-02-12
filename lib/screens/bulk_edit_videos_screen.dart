@@ -39,7 +39,7 @@ class _BulkEditVideosScreenState extends State<BulkEditVideosScreen> {
     try {
       // Load dance styles
       final stylesSnapshot = await FirebaseFirestore.instance
-          .collection('danceStyles')
+          .collection('onlineStyles')
           .get();
       
       // Load instructors

@@ -92,6 +92,7 @@ class PaymentService {
         'amount': amount,
         'description': description,
         'payment_type': paymentType,
+        'payment_method': 'online',
         'item_id': itemId,
         'status': paymentPending,
         'created_at': FieldValue.serverTimestamp(),
@@ -99,8 +100,8 @@ class PaymentService {
         'metadata': metadata ?? {},
       };
 
-      // Save payment record
-      await FirebaseFirestore.instance
+      // Save payment record (do not block order creation)
+      final paymentWrite = FirebaseFirestore.instance
           .collection('payments')
           .doc(paymentId)
           .set(paymentData);
@@ -115,10 +116,16 @@ class PaymentService {
         throw Exception('Payment amount too large. Maximum allowed: ₹21,474,836');
       }
       final int amountPaise = amount * 100;
-      final orderResp = await createOrder.call({
+      final orderFuture = createOrder.call({
         'amount': amountPaise, // in paise
         'receipt': receipt,
       });
+      final keyFuture = _ensureRazorpayKeyLoaded();
+
+      final orderResp = await orderFuture;
+      await keyFuture;
+      await paymentWrite;
+
       final data = Map<String, dynamic>.from((orderResp.data ?? {}) as Map);
       final orderId = (data['orderId'] ?? '') as String;
       final orderAmount = (data['amount'] ?? amount) as int;
@@ -126,9 +133,6 @@ class PaymentService {
       if (orderId.isEmpty) {
         throw Exception('ORDER_ID_MISSING');
       }
-
-      // Ensure we have a public key (dart-define or Firestore fallback)
-      await _ensureRazorpayKeyLoaded();
 
       // Open Razorpay Checkout
       final options = {
@@ -238,22 +242,15 @@ class PaymentService {
         throw Exception('User not authenticated');
       }
 
-      // Check if payment already exists to prevent duplicates
       final paymentRef = FirebaseFirestore.instance.collection('payments').doc(paymentId);
-      final existingPayment = await paymentRef.get();
-      
-      // If payment already exists, return success without creating duplicates
-      if (existingPayment.exists) {
-        return {'success': true, 'status': paymentPendingCash, 'payment_id': paymentId};
-      }
-
-      // Create payment document
+      // Create payment document (no pre-read to avoid permission issues for new docs)
       await paymentRef.set({
         'id': paymentId,
         'user_id': user.uid,
         'amount': amount,
         'description': description,
         'payment_type': paymentType,
+        'payment_method': 'cash',
         'item_id': itemId,
         'status': paymentPendingCash,
         'created_at': FieldValue.serverTimestamp(),
@@ -520,24 +517,6 @@ class PaymentService {
 
   // Client-side enrollment writes removed; enrollment is handled by Cloud Functions after verification
 
-  /// Notify admin about successful payment
-  static Future<void> _notifyAdminAboutPayment(Map<String, dynamic> paymentData) async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('admin_notifications')
-          .add({
-        'type': 'payment_success',
-        'title': 'New Payment Received',
-        'message': 'Payment of ₹${paymentData['amount']} received for ${paymentData['description']}',
-        'payment_id': paymentData['id'],
-        'user_id': paymentData['user_id'],
-        'created_at': FieldValue.serverTimestamp(),
-        'read': false,
-      });
-    } catch (e) {
-    }
-  }
-
   /// Get payment history for user
   static Future<List<Map<String, dynamic>>> getPaymentHistory(String userId) async {
     try {
@@ -666,6 +645,24 @@ class PaymentService {
       'paymentType': paymentType,
       'itemId': itemId,
       'userId': userId,
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  /// Notify listeners about subscription purchases from Play/App Store
+  static void notifySubscriptionPurchase({
+    required String planId,
+    required String billingCycle,
+    required String productId,
+    required String store,
+  }) {
+    _refreshController.add({
+      'type': 'payment_success',
+      'paymentType': 'subscription',
+      'itemId': planId,
+      'billingCycle': billingCycle,
+      'productId': productId,
+      'store': store,
       'timestamp': DateTime.now().millisecondsSinceEpoch,
     });
   }

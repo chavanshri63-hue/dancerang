@@ -54,6 +54,14 @@ class SubscriptionRenewalService {
         final status = data['status'] as String? ?? '';
         final autoRenew = data['autoRenew'] as bool? ?? false;
         final nextRenewalDate = data['nextRenewalDate'] as Timestamp?;
+        final paymentProvider = (data['paymentProvider'] ?? data['source'] ?? data['store'] ?? '')
+            .toString()
+            .toLowerCase();
+
+        // Skip store-managed subscriptions (Play Store / App Store)
+        if (paymentProvider.contains('play') || paymentProvider.contains('app_store') || paymentProvider.contains('iap')) {
+          return false;
+        }
         
         // Only process active subscriptions
         if (status != 'active' || !autoRenew || nextRenewalDate == null) return false;

@@ -24,6 +24,10 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   String? _adminKey;
   String? _facultyKey;
   bool _keysLoaded = false;
+  String _countryCode = '+91';
+  final List<String> _countryCodes = [
+    '+91', '+1', '+44', '+971', '+61', '+65', '+81', '+49', '+33', '+39'
+  ];
 
   // Theme colors
   static const Color primaryRed = Color(0xFFE53935);
@@ -179,9 +183,11 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       return;
     }
 
-    if (_phoneController.text.trim().length != 10) {
+    final rawInput = _phoneController.text.trim();
+    final digitsOnly = rawInput.replaceAll(RegExp(r'\\D'), '');
+    if (digitsOnly.length < 6) {
       setState(() {
-        _errorMessage = 'Please enter a valid 10-digit phone number';
+        _errorMessage = 'Please enter a valid phone number';
       });
       return;
     }
@@ -194,7 +200,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     try {
       String phoneNumber = _phoneController.text.trim();
       if (!phoneNumber.startsWith('+')) {
-        phoneNumber = '+91$phoneNumber';
+        phoneNumber = '$_countryCode$phoneNumber';
       }
 
       await _auth.verifyPhoneNumber(
@@ -242,7 +248,6 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       });
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -391,7 +396,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                               child: Row(
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                     decoration: const BoxDecoration(
                                       color: primaryRed,
                                       borderRadius: BorderRadius.only(
@@ -399,11 +404,29 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                                         bottomLeft: Radius.circular(12),
                                       ),
                                     ),
-                                    child: const Text(
-                                      '+91',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
+                                    child: DropdownButtonHideUnderline(
+                                      child: DropdownButton<String>(
+                                        value: _countryCode,
+                                        dropdownColor: const Color(0xFF1B1B1B),
+                                        iconEnabledColor: Colors.white,
+                                        items: _countryCodes
+                                            .map((code) => DropdownMenuItem(
+                                                  value: code,
+                                                  child: Text(
+                                                    code,
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ))
+                                            .toList(),
+                                        onChanged: (value) {
+                                          if (value == null) return;
+                                          setState(() {
+                                            _countryCode = value;
+                                          });
+                                        },
                                       ),
                                     ),
                                   ),

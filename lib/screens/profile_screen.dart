@@ -10,6 +10,7 @@ import 'help_support_screen.dart';
 import 'admin_dashboard_screen.dart';
 import 'login_screen.dart';
 import 'user_progress_screen.dart';
+import '../config/demo_session.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String role; // 'student' | 'faculty' | 'admin'
@@ -51,6 +52,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() {
       _isLoading = true;
     });
+
+    if (DemoSession.isActive) {
+      setState(() {
+        _currentRole = 'demo';
+        _profile = UserProfile(
+          name: 'Demo',
+          email: 'demo@dancerang.com',
+          phone: '+91 00000 00000',
+          role: 'Demo',
+          id: 'DEMO001',
+          joinDate: DateTime.now(),
+          profileImage: null,
+          additionalInfo: const {
+            'level': 'Demo',
+            'favorite_dance_style': 'Not Set',
+          },
+        );
+        _isLoading = false;
+      });
+      return;
+    }
 
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -1203,6 +1225,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
+              DemoSession.isActive = false;
               await FirebaseAuth.instance.signOut();
               if (!context.mounted) return;
               Navigator.of(context).pushAndRemoveUntil(

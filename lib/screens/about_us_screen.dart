@@ -232,10 +232,6 @@ class _AboutUsScreenState extends State<AboutUsScreen> {
                 _buildStudioHighlights(aboutData),
                 const SizedBox(height: 24),
                 
-                // Awards Section
-                _buildAwardsSection(aboutData),
-                const SizedBox(height: 24),
-                
                 // Contact Information
                 _buildContactSection(aboutData),
                 const SizedBox(height: 24),
@@ -250,7 +246,11 @@ class _AboutUsScreenState extends State<AboutUsScreen> {
   Widget _buildStudioHeader(Map<String, dynamic> data) {
     return Padding(
           padding: const EdgeInsets.all(24),
-          child: Column(
+          child: Container(
+            width: double.infinity,
+            alignment: Alignment.center,
+            child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // Logo Section
               GestureDetector(
@@ -354,6 +354,7 @@ class _AboutUsScreenState extends State<AboutUsScreen> {
               const SizedBox(height: 16),
               Text(
                 data['studioName'] ?? 'DanceRang',
+                textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: Color(0xFFF9FAFB),
                   fontSize: 32,
@@ -364,6 +365,7 @@ class _AboutUsScreenState extends State<AboutUsScreen> {
               const SizedBox(height: 8),
               Text(
                 data['tagline'] ?? 'Step into Excellence',
+                textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: Color(0xFFE53935),
                   fontSize: 18,
@@ -372,40 +374,53 @@ class _AboutUsScreenState extends State<AboutUsScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 16,
+                runSpacing: 8,
                 children: [
-                  Icon(
-                    Icons.location_on,
-                    color: Colors.white70,
-                    size: 16,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.location_on,
+                        color: Colors.white70,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        data['location'] ?? 'Mumbai, India',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    data['location'] ?? 'Mumbai, India',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Icon(
-                    Icons.calendar_today,
-                    color: Colors.white70,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Since ${data['foundedYear'] ?? '2020'}',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.calendar_today,
+                        color: Colors.white70,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Since ${data['foundedYear'] ?? '2020'}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ],
       ),
+          ),
     );
   }
 

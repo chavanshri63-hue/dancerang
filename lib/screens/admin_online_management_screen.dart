@@ -28,10 +28,7 @@ class _AdminOnlineManagementScreenState extends State<AdminOnlineManagementScree
   bool _isBulkMode = false;
   late TabController _tabController;
 
-  final List<String> _sections = [
-    'All', 'Bollywood', 'Hip-Hop', 'Contemporary', 'Classical', 
-    'Tutorials', 'Choreography', 'Practice', 'Live Recordings', 'Announcements'
-  ];
+  final List<String> _sections = ['All'];
 
   final List<String> _statuses = ['All', 'draft', 'scheduled', 'published'];
   final List<String> _sortOptions = ['createdAt', 'title', 'views', 'likes', 'section'];
@@ -150,13 +147,14 @@ class _AdminOnlineManagementScreenState extends State<AdminOnlineManagementScree
                       ),
                     ),
                     const SizedBox(height: 12),
+                    // Styles row (real data)
+                    _buildSectionChips(),
+                    const SizedBox(height: 8),
                     // Filter Chips
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: [
-                          _buildFilterChip('Section: $_selectedSection', _showSectionFilter),
-                          const SizedBox(width: 8),
                           _buildFilterChip('Status: $_selectedStatus', _showStatusFilter),
                           const SizedBox(width: 8),
                           _buildFilterChip('Sort: ${_sortBy} ${_sortDescending ? '↓' : '↑'}', _showSortFilter),
@@ -835,6 +833,73 @@ class _AdminOnlineManagementScreenState extends State<AdminOnlineManagementScree
     );
   }
 
+  int _asInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    return int.tryParse(value.toString()) ?? 0;
+  }
+
+  Widget _buildSectionChips() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('onlineStyles')
+          .where('isActive', isEqualTo: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final styles = snapshot.data?.docs ?? [];
+        final seen = <String>{};
+        final sections = <String>[];
+        for (final doc in styles) {
+          final data = doc.data();
+          final name = (data['name'] as String? ?? '').trim();
+          if (name.isEmpty) continue;
+          final normalized = name.toLowerCase();
+          if (seen.add(normalized)) {
+            sections.add(name);
+          }
+        }
+        sections.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        final allSections = ['All', ...sections];
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: allSections.map((section) {
+              final isSelected = _selectedSection == section;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: InkWell(
+                  onTap: () => setState(() => _selectedSection = section),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFFE53935).withOpacity(0.15)
+                          : const Color(0xFF1B1B1B),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isSelected ? const Color(0xFFE53935) : const Color(0xFF404040),
+                      ),
+                    ),
+                    child: Text(
+                      section,
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : Colors.white70,
+                        fontSize: 12,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildStatCard(String label, int count) {
     return Expanded(
       child: Container(
@@ -966,16 +1031,38 @@ class _AdminOnlineManagementScreenState extends State<AdminOnlineManagementScree
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1B1B1B),
         title: const Text('Select Section', style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: _sections.map((section) => ListTile(
-            title: Text(section, style: const TextStyle(color: Colors.white)),
-            selected: _selectedSection == section,
-            onTap: () {
-              setState(() => _selectedSection = section);
-              Navigator.pop(context);
-            },
-          )).toList(),
+        content: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('onlineStyles')
+              .where('isActive', isEqualTo: true)
+              .snapshots(),
+          builder: (context, snapshot) {
+            final styles = snapshot.data?.docs ?? [];
+            final seen = <String>{};
+            final sections = <String>[];
+            for (final doc in styles) {
+              final data = doc.data();
+              final name = (data['name'] as String? ?? '').trim();
+              if (name.isEmpty) continue;
+              final normalized = name.toLowerCase();
+              if (seen.add(normalized)) {
+                sections.add(name);
+              }
+            }
+            sections.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+            final allSections = ['All', ...sections];
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: allSections.map((section) => ListTile(
+                title: Text(section, style: const TextStyle(color: Colors.white)),
+                selected: _selectedSection == section,
+                onTap: () {
+                  setState(() => _selectedSection = section);
+                  Navigator.pop(context);
+                },
+              )).toList(),
+            );
+          },
         ),
       ),
     );
@@ -1347,9 +1434,7 @@ class _AdminOnlineManagementScreenState extends State<AdminOnlineManagementScree
           Expanded(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: FirebaseFirestore.instance
-                  .collection('danceStyles')
-                  .orderBy('priority')
-                  .orderBy('name')
+                  .collection('onlineStyles')
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -1375,7 +1460,19 @@ class _AdminOnlineManagementScreenState extends State<AdminOnlineManagementScree
                   );
                 }
                 
-                final styles = snapshot.data?.docs ?? [];
+                final styles = (snapshot.data?.docs ?? []).toList()
+                  ..sort((a, b) {
+                    final aData = a.data();
+                    final bData = b.data();
+                    final aPriority = _asInt(aData['priority']);
+                    final bPriority = _asInt(bData['priority']);
+                    if (aPriority != bPriority) {
+                      return aPriority.compareTo(bPriority);
+                    }
+                    final aName = (aData['name'] ?? '').toString().toLowerCase();
+                    final bName = (bData['name'] ?? '').toString().toLowerCase();
+                    return aName.compareTo(bName);
+                  });
                 
                 if (styles.isEmpty) {
                   return Center(
@@ -1801,7 +1898,7 @@ class _AdminOnlineManagementScreenState extends State<AdminOnlineManagementScree
 
   Future<void> _addDefaultStyles() async {
     try {
-      await DanceStylesService.initializeDefaultStyles();
+      await OnlineStylesService.initializeDefaultStyles();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1844,10 +1941,10 @@ class _AdminOnlineManagementScreenState extends State<AdminOnlineManagementScree
   }
 
   Future<void> _toggleStyleStatus(String styleId) async {
-    final doc = await FirebaseFirestore.instance.collection('danceStyles').doc(styleId).get();
+    final doc = await FirebaseFirestore.instance.collection('onlineStyles').doc(styleId).get();
     final currentStatus = doc.data()?['isActive'] ?? true;
     
-    await FirebaseFirestore.instance.collection('danceStyles').doc(styleId).update({
+    await FirebaseFirestore.instance.collection('onlineStyles').doc(styleId).update({
       'isActive': !currentStatus,
       'updatedAt': FieldValue.serverTimestamp(),
     });
@@ -1887,7 +1984,7 @@ class _AdminOnlineManagementScreenState extends State<AdminOnlineManagementScree
 
     if (confirmed == true) {
       try {
-        await FirebaseFirestore.instance.collection('danceStyles').doc(styleId).delete();
+        await FirebaseFirestore.instance.collection('onlineStyles').doc(styleId).delete();
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -2208,54 +2305,36 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
   Widget _buildSectionPicker() {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
-          .collection('danceStyles')
+          .collection('onlineStyles')
           .where('isActive', isEqualTo: true)
-          .orderBy('priority')
-          .orderBy('name')
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return DropdownButtonFormField<String>(
-            value: _section,
-            items: const [DropdownMenuItem(value: 'Bollywood', child: Text('Bollywood'))],
-            onChanged: (v) => setState(() => _section = v ?? 'Bollywood'),
-            decoration: const InputDecoration(
-              labelText: 'Section *',
-              border: OutlineInputBorder(),
-            ),
-          );
-        }
-        
-        if (snapshot.hasError) {
-          return DropdownButtonFormField<String>(
-            value: _section,
-            items: const [DropdownMenuItem(value: 'Bollywood', child: Text('Bollywood'))],
-            onChanged: (v) => setState(() => _section = v ?? 'Bollywood'),
-            decoration: const InputDecoration(
-              labelText: 'Section *',
-              border: OutlineInputBorder(),
-            ),
-          );
-        }
-        
         final styles = snapshot.data?.docs ?? [];
-        final sections = styles.map((doc) {
+        final seen = <String>{};
+        final sections = <String>[];
+        for (final doc in styles) {
           final data = doc.data();
-          return data['name'] as String? ?? '';
-        }).where((name) => name.isNotEmpty).toList();
-        
-        // Add default sections if no styles found
+          final name = (data['name'] as String? ?? '').trim();
+          if (name.isEmpty) continue;
+          final normalized = name.toLowerCase();
+          if (seen.add(normalized)) {
+            sections.add(name);
+          }
+        }
+
+        // Add default sections if no styles found or stream not ready
         if (sections.isEmpty) {
           sections.addAll(['Bollywood', 'Hip-Hop', 'Contemporary', 'Classical']);
         }
-        
+
         // Ensure current selection is valid
+        sections.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
         if (!sections.contains(_section)) {
           _section = sections.isNotEmpty ? sections.first : 'Bollywood';
         }
-        
+
         return DropdownButtonFormField<String>(
-          value: _section,
+          value: sections.contains(_section) ? _section : null,
           items: sections.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
           onChanged: (v) => setState(() => _section = v ?? 'Bollywood'),
           decoration: const InputDecoration(
@@ -2327,7 +2406,9 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
               Column(
                 children: [
                   LinearProgressIndicator(
-                    value: _uploadProgress,
+                    value: _uploadProgress.isFinite
+                        ? _uploadProgress.clamp(0.0, 1.0)
+                        : 0.0,
                     backgroundColor: Colors.grey.withOpacity(0.3),
                     valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFE53935)),
                   ),
@@ -2335,7 +2416,7 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
                   Text(
                     _uploadProgress >= 1.0 
                         ? 'Upload Complete! ✅'
-                        : '${(_uploadProgress * 100).toInt()}% uploaded',
+                        : '${((_uploadProgress.isFinite ? _uploadProgress.clamp(0.0, 1.0) : 0.0) * 100).toInt()}% uploaded',
                     style: TextStyle(
                       color: _uploadProgress >= 1.0 ? Colors.green : Colors.white70, 
                       fontSize: 12,
@@ -2512,7 +2593,7 @@ class _StyleEditDialogState extends State<_StyleEditDialog> {
 
   Future<void> _loadStyle() async {
     final doc = await FirebaseFirestore.instance
-        .collection('danceStyles')
+        .collection('onlineStyles')
         .doc(widget.styleId)
         .get();
     
@@ -2717,7 +2798,7 @@ class _StyleEditDialogState extends State<_StyleEditDialog> {
       if (widget.styleId == null) {
         // For new styles, get the next priority number
         final existingStyles = await FirebaseFirestore.instance
-            .collection('danceStyles')
+            .collection('onlineStyles')
             .orderBy('priority', descending: true)
             .limit(1)
             .get();
@@ -2728,14 +2809,14 @@ class _StyleEditDialogState extends State<_StyleEditDialog> {
         }
         
         
-        await FirebaseFirestore.instance.collection('danceStyles').add({
+        await FirebaseFirestore.instance.collection('onlineStyles').add({
           ...data,
           'priority': nextPriority,
           'createdAt': FieldValue.serverTimestamp(),
         });
       } else {
         await FirebaseFirestore.instance
-            .collection('danceStyles')
+            .collection('onlineStyles')
             .doc(widget.styleId)
             .update(data);
       }

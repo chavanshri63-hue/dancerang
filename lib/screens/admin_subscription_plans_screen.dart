@@ -91,6 +91,9 @@ class _EditPlanDialogState extends State<_EditPlanDialog> {
   final TextEditingController _name = TextEditingController();
   final TextEditingController _price = TextEditingController();
   final TextEditingController _desc = TextEditingController();
+  final TextEditingController _storeProductId = TextEditingController();
+  final TextEditingController _playProductId = TextEditingController();
+  final TextEditingController _appStoreProductId = TextEditingController();
   String _billing = 'monthly';
   int _priority = 1;
   bool _trial = false;
@@ -110,6 +113,9 @@ class _EditPlanDialogState extends State<_EditPlanDialog> {
       _name.text = (d['name'] ?? '').toString();
       _price.text = (d['price'] ?? 0).toString();
       _desc.text = (d['description'] ?? '').toString();
+      _storeProductId.text = (d['storeProductId'] ?? '').toString();
+      _playProductId.text = (d['playProductId'] ?? '').toString();
+      _appStoreProductId.text = (d['appStoreProductId'] ?? '').toString();
       _billing = (d['billingCycle'] ?? 'monthly').toString();
       _priority = (d['priority'] ?? 1) as int;
       _trial = d['trialEnabled'] == true;
@@ -142,6 +148,12 @@ class _EditPlanDialogState extends State<_EditPlanDialog> {
             ),
             const SizedBox(height: 12),
             TextField(controller: _desc, maxLines: 2, decoration: const InputDecoration(labelText: 'Description')),
+            const SizedBox(height: 12),
+            TextField(controller: _storeProductId, decoration: const InputDecoration(labelText: 'Store Product ID (fallback)')),
+            const SizedBox(height: 12),
+            TextField(controller: _playProductId, decoration: const InputDecoration(labelText: 'Play Store Product ID')),
+            const SizedBox(height: 12),
+            TextField(controller: _appStoreProductId, decoration: const InputDecoration(labelText: 'App Store Product ID')),
             const SizedBox(height: 12),
             TextField(
               controller: TextEditingController(text: '$_priority'),
@@ -179,6 +191,9 @@ class _EditPlanDialogState extends State<_EditPlanDialog> {
         'price': int.tryParse(_price.text.trim()) ?? 0,
         'billingCycle': _billing,
         'description': _desc.text.trim(),
+        'storeProductId': _storeProductId.text.trim(),
+        'playProductId': _playProductId.text.trim(),
+        'appStoreProductId': _appStoreProductId.text.trim(),
         'priority': _priority,
         'trialEnabled': _trial,
         'trialDays': _trial ? _trialDays : 0,

@@ -80,14 +80,14 @@ class HelpSupportScreen extends StatelessWidget {
           icon: Icons.privacy_tip_outlined,
           title: 'Privacy Policy',
           subtitle: 'Read our policy',
-          url: 'https://dancerang.com/privacy',
+          url: 'https://dancerang.com/privacy-policy',
         ),
         _linkTile(
           context,
           icon: Icons.description_outlined,
           title: 'Terms of Service',
           subtitle: 'Review terms',
-          url: 'https://dancerang.com/terms',
+          url: 'https://dancerang.com/terms-of-service',
         ),
         _linkTile(
           context,
@@ -148,7 +148,7 @@ class HelpSupportScreen extends StatelessWidget {
             icon: Icons.privacy_tip_outlined,
             title: 'Privacy Policy',
             subtitle: 'Read our policy',
-            url: data['privacyPolicy'],
+            url: _normalizeUrl(data['privacyPolicy']),
           ),
         if (data['termsOfService']?.isNotEmpty == true)
           _linkTile(
@@ -156,7 +156,7 @@ class HelpSupportScreen extends StatelessWidget {
             icon: Icons.description_outlined,
             title: 'Terms of Service',
             subtitle: 'Review terms',
-            url: data['termsOfService'],
+            url: _normalizeUrl(data['termsOfService']),
           ),
         if (data['website']?.isNotEmpty == true)
           _linkTile(
@@ -164,10 +164,27 @@ class HelpSupportScreen extends StatelessWidget {
             icon: Icons.language,
             title: 'Website',
             subtitle: 'Visit our website',
-            url: data['website'],
+            url: _normalizeUrl(data['website']),
           ),
       ],
     );
+  }
+
+  String _normalizeUrl(String rawUrl) {
+    final trimmed = rawUrl.trim();
+    if (trimmed == 'https://dancerang.com/privacy') {
+      return 'https://dancerang.com/privacy-policy';
+    }
+    if (trimmed == 'https://dancerang.com/terms') {
+      return 'https://dancerang.com/terms-of-service';
+    }
+    if (trimmed == 'www.dancerang.com') {
+      return 'https://dancerang.com';
+    }
+    if (trimmed == 'http://dancerang.com') {
+      return 'https://dancerang.com';
+    }
+    return trimmed;
   }
 
   Widget _sectionHeader(String title) {

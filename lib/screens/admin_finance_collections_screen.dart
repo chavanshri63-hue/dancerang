@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -14,19 +16,53 @@ class _AdminFinanceCollectionsScreenState extends State<AdminFinanceCollectionsS
   bool _isLoading = true;
   String _selectedPeriod = '30 days';
   String _selectedFilter = 'all';
+  String _selectedMethod = 'all';
   
   Map<String, dynamic> _summary = {};
   List<Map<String, dynamic>> _transactions = [];
   List<Map<String, dynamic>> _pendingPayments = [];
   List<Map<String, dynamic>> _subscriptions = [];
+  StreamSubscription<QuerySnapshot>? _paymentsSub;
+  StreamSubscription<QuerySnapshot>? _subscriptionsSub;
+  Timer? _reloadDebounce;
+  final Map<String, String> _userNameCache = {};
 
   @override
   void initState() {
     super.initState();
     _loadFinanceData();
+    _attachLiveListeners();
+  }
+
+  @override
+  void dispose() {
+    _paymentsSub?.cancel();
+    _subscriptionsSub?.cancel();
+    _reloadDebounce?.cancel();
+    super.dispose();
+  }
+
+  void _attachLiveListeners() {
+    _paymentsSub = FirebaseFirestore.instance
+        .collection('payments')
+        .snapshots()
+        .listen((_) => _scheduleReload());
+    _subscriptionsSub = FirebaseFirestore.instance
+        .collection('subscriptions')
+        .snapshots()
+        .listen((_) => _scheduleReload());
+  }
+
+  void _scheduleReload() {
+    _reloadDebounce?.cancel();
+    _reloadDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      _loadFinanceData();
+    });
   }
 
   Future<void> _loadFinanceData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     
     try {
@@ -35,22 +71,16 @@ class _AdminFinanceCollectionsScreenState extends State<AdminFinanceCollectionsS
       final days = _getDaysFromPeriod(_selectedPeriod);
       final startDate = now.subtract(Duration(days: days));
 
-      // Load payments (using payments collection, not transactions)
-      Query query = FirebaseFirestore.instance
-          .collection('payments')
-          .where('created_at', isGreaterThan: Timestamp.fromDate(startDate));
-
+      // Load payments (client-side time filtering using all supported timestamps)
+      Query query = FirebaseFirestore.instance.collection('payments');
       if (_selectedFilter != 'all') {
-        // Map filter values to actual payment statuses
         if (_selectedFilter == 'success') {
-          // For success, include both 'success' and 'paid' statuses
           query = query.where('status', whereIn: ['success', 'paid']);
         } else {
           query = query.where('status', isEqualTo: _selectedFilter);
         }
       }
-
-      final paymentsSnapshot = await query.orderBy('created_at', descending: true).get();
+      final paymentsSnapshot = await query.get();
 
       // Load pending payments separately
       final pendingSnapshot = await FirebaseFirestore.instance
@@ -79,21 +109,33 @@ class _AdminFinanceCollectionsScreenState extends State<AdminFinanceCollectionsS
         }
       }
 
-      // Fetch user names
+      // Fetch user names (cached + parallel)
       final Map<String, String> userNameMap = {};
+      final List<Future<void>> pendingFetches = [];
       for (var userId in userIds) {
-        try {
-          final userDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(userId)
-              .get();
-          if (userDoc.exists) {
-            final userData = userDoc.data();
-            userNameMap[userId] = (userData?['name'] ?? userData?['displayName'] ?? 'Unknown') as String;
-          }
-        } catch (e) {
-          userNameMap[userId] = 'Unknown';
+        final cached = _userNameCache[userId];
+        if (cached != null) {
+          userNameMap[userId] = cached;
+          continue;
         }
+        pendingFetches.add(FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .get()
+            .then((userDoc) {
+          final userData = userDoc.data() ?? {};
+          final name =
+              (userData['name'] ?? userData['displayName'] ?? 'Unknown')
+                  .toString();
+          _userNameCache[userId] = name;
+          userNameMap[userId] = name;
+        }).catchError((_) {
+          _userNameCache[userId] = 'Unknown';
+          userNameMap[userId] = 'Unknown';
+        }));
+      }
+      if (pendingFetches.isNotEmpty) {
+        await Future.wait(pendingFetches);
       }
 
       // Process payments
@@ -105,6 +147,13 @@ class _AdminFinanceCollectionsScreenState extends State<AdminFinanceCollectionsS
 
       for (var doc in paymentsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
+        final ts = _getPaymentTimestamp(data);
+        if (ts != null && ts.isBefore(startDate)) {
+          continue;
+        }
+        if (!_matchesMethodFilter(data)) {
+          continue;
+        }
         final userId = data['user_id'] as String?;
         final userName = userId != null ? userNameMap[userId] ?? 'Unknown' : 'Unknown';
         
@@ -113,6 +162,7 @@ class _AdminFinanceCollectionsScreenState extends State<AdminFinanceCollectionsS
           'amount': data['amount'] ?? 0.0,
           'status': data['status'] ?? 'pending',
           'type': data['payment_type'] ?? 'unknown',
+          'method': _resolvePaymentMethod(data),
           'userName': userName,
           'createdAt': data['created_at'],
           'description': data['description'] ?? '',
@@ -128,11 +178,23 @@ class _AdminFinanceCollectionsScreenState extends State<AdminFinanceCollectionsS
           failedPayments++;
         }
       }
+      transactions.sort((a, b) {
+        final at = _getPaymentTimestamp(a) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bt = _getPaymentTimestamp(b) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bt.compareTo(at);
+      });
 
       // Process pending payments
       List<Map<String, dynamic>> pendingPayments = [];
       for (var doc in pendingSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
+        final ts = _getPaymentTimestamp(data);
+        if (ts != null && ts.isBefore(startDate)) {
+          continue;
+        }
+        if (!_matchesMethodFilter(data)) {
+          continue;
+        }
         final userId = data['user_id'] as String?;
         final userName = userId != null ? userNameMap[userId] ?? 'Unknown' : 'Unknown';
         
@@ -140,10 +202,16 @@ class _AdminFinanceCollectionsScreenState extends State<AdminFinanceCollectionsS
           'id': doc.id,
           'amount': data['amount'] ?? 0.0,
           'userName': userName,
+          'method': _resolvePaymentMethod(data),
           'createdAt': data['created_at'],
           'description': data['description'] ?? '',
         });
       }
+      pendingPayments.sort((a, b) {
+        final at = _getPaymentTimestamp(a) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bt = _getPaymentTimestamp(b) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bt.compareTo(at);
+      });
 
       // Process subscriptions
       List<Map<String, dynamic>> subscriptions = [];
@@ -160,6 +228,7 @@ class _AdminFinanceCollectionsScreenState extends State<AdminFinanceCollectionsS
         });
       }
 
+      if (!mounted) return;
       setState(() {
         _summary = {
           'totalRevenue': totalRevenue,
@@ -175,6 +244,7 @@ class _AdminFinanceCollectionsScreenState extends State<AdminFinanceCollectionsS
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -207,6 +277,11 @@ class _AdminFinanceCollectionsScreenState extends State<AdminFinanceCollectionsS
       appBar: GlassmorphismAppBar(
         title: 'Finance & Collections',
         actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_sweep, color: Colors.white),
+            tooltip: 'Clear old transactions',
+            onPressed: _clearOldTransactions,
+          ),
           DropdownButton<String>(
             value: _selectedPeriod,
             items: const [
@@ -240,6 +315,8 @@ class _AdminFinanceCollectionsScreenState extends State<AdminFinanceCollectionsS
                   
                   // Filter Tabs
                   _buildFilterTabs(),
+                  const SizedBox(height: 12),
+                  _buildMethodTabs(),
                   const SizedBox(height: 20),
                   
                   // Content based on filter
@@ -285,6 +362,115 @@ class _AdminFinanceCollectionsScreenState extends State<AdminFinanceCollectionsS
         ),
       ],
     );
+  }
+
+  Future<void> _clearOldTransactions() async {
+    final cutoffDate = DateTime(2026, 1, 31);
+    final cutoffLabel = '${cutoffDate.day}/${cutoffDate.month}/${cutoffDate.year}';
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1B1B1B),
+        title: const Text('Clear Old Transactions', style: TextStyle(color: Colors.white)),
+        content: Text(
+          'This will permanently delete all payments before $cutoffLabel. Continue?',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE53935)),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+    if (!mounted) return;
+
+    setState(() => _isLoading = true);
+    int deleted = 0;
+    try {
+      DocumentSnapshot? lastDoc;
+      while (true) {
+        Query query = FirebaseFirestore.instance
+            .collection('payments')
+            .orderBy(FieldPath.documentId)
+            .limit(400);
+        if (lastDoc != null) {
+          query = query.startAfterDocument(lastDoc);
+        }
+        final snapshot = await query.get();
+        if (snapshot.docs.isEmpty) break;
+
+        final batch = FirebaseFirestore.instance.batch();
+        int batchDeletes = 0;
+        for (final doc in snapshot.docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final ts = _getPaymentTimestamp(data);
+          if (ts != null && ts.isBefore(cutoffDate)) {
+            batch.delete(doc.reference);
+            batchDeletes++;
+          }
+        }
+        if (batchDeletes > 0) {
+          await batch.commit();
+          deleted += batchDeletes;
+        }
+        lastDoc = snapshot.docs.last;
+        if (snapshot.docs.length < 400) break;
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Deleted $deleted old payments before $cutoffLabel.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      if (!mounted) return;
+      await _loadFinanceData();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to clear old payments: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    }
+  }
+
+  DateTime? _getPaymentTimestamp(Map<String, dynamic> data) {
+    final raw = data['created_at'] ??
+        data['createdAt'] ??
+        data['timestamp'] ??
+        data['updated_at'];
+    if (raw is Timestamp) return raw.toDate();
+    return null;
+  }
+
+  String _resolvePaymentMethod(Map<String, dynamic> data) {
+    final status = (data['status'] ?? '').toString().toLowerCase();
+    final method = (data['payment_method'] ?? '').toString().toLowerCase();
+    if (method.isNotEmpty) return method;
+    if (status == 'pending_cash') return 'cash';
+    return 'online';
+  }
+
+  bool _matchesMethodFilter(Map<String, dynamic> data) {
+    if (_selectedMethod == 'all') return true;
+    final method = _resolvePaymentMethod(data);
+    return method == _selectedMethod;
   }
 
   Widget _buildSummaryCard(String title, String value, IconData icon, Color color) {
@@ -359,6 +545,27 @@ class _AdminFinanceCollectionsScreenState extends State<AdminFinanceCollectionsS
     );
   }
 
+  Widget _buildMethodTabs() {
+    return Card(
+      color: Theme.of(context).cardColor,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _buildMethodTab('all', 'All Methods'),
+              const SizedBox(width: 8),
+              _buildMethodTab('online', 'Online'),
+              const SizedBox(width: 8),
+              _buildMethodTab('cash', 'Cash'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFilterTab(String value, String label) {
     final isSelected = _selectedFilter == value;
     return GestureDetector(
@@ -375,6 +582,35 @@ class _AdminFinanceCollectionsScreenState extends State<AdminFinanceCollectionsS
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected ? const Color(0xFFE53935) : Colors.white24,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.white70,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMethodTab(String value, String label) {
+    final isSelected = _selectedMethod == value;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedMethod = value;
+        });
+        _loadFinanceData();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF4F46E5) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF4F46E5) : Colors.white24,
           ),
         ),
         child: Text(

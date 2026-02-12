@@ -182,7 +182,8 @@ service cloud.firestore {
     }
     
     match /onlineVideos/{videoId} {
-      allow read: if isSignedIn();
+      // Public read for review/demo and browsing
+      allow read: if true;
       allow write: if isAdmin();
     }
     // Subscription plans (admin-managed)
@@ -250,14 +251,14 @@ service cloud.firestore {
                       request.resource.data.payment_type == resource.data.payment_type &&
                       request.resource.data.item_id == resource.data.item_id &&
                       request.resource.data.description == resource.data.description &&
-                      request.resource.data.status in ['pending', 'success', 'failed', 'cancelled'] &&
+                      request.resource.data.status in ['pending', 'pending_cash', 'success', 'paid', 'failed', 'cancelled'] &&
                       request.resource.data.updated_at != null) ||
-                     // Admin can update payment status for cash payment approvals
-                     (isAdmin() &&
-                      request.resource.data.status in ['pending', 'success', 'failed', 'cancelled'] &&
+                    // Admin or faculty can update payment status for cash payment approvals
+                    ((isAdmin() || isFaculty()) &&
+                      request.resource.data.status in ['pending', 'pending_cash', 'success', 'paid', 'failed', 'cancelled'] &&
                       request.resource.data.updated_at != null)
                    );
-      allow delete: if false;
+      allow delete: if isAdmin();
     }
     
     // User subscriptions: users can read their own subscriptions
@@ -507,7 +508,20 @@ service cloud.firestore {
     
     // Dance Styles Collection - Admin only for write, everyone can read
     match /danceStyles/{styleId} {
-      allow read: if isSignedIn();
+      // Public read for online styles browsing
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Online styles collection
+    match /onlineStyles/{styleId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Class styles collection
+    match /classStyles/{styleId} {
+      allow read: if true;
       allow write: if isAdmin();
     }
     

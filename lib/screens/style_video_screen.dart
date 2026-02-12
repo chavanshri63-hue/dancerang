@@ -4,7 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/glassmorphism_app_bar.dart';
 import 'video_player_screen.dart';
 import '../services/subscription_renewal_service.dart';
-import '../services/payment_service.dart';
+import '../services/iap_service.dart';
+import '../services/online_subscription_service.dart';
 
 class StyleVideoScreen extends StatefulWidget {
   final String styleName;
@@ -154,8 +155,8 @@ class _StyleVideoListCard extends StatelessWidget {
         final hasActiveSubscription = subscriptionSnapshot.hasData && 
             subscriptionSnapshot.data == true;
         
-        // All videos are now locked unless user has active subscription
-        final isLocked = !hasActiveSubscription;
+        // Lock only paid videos if subscription is missing
+        final isLocked = isPaidContent && !hasActiveSubscription;
 
         return Card(
           elevation: 6,
@@ -367,7 +368,6 @@ class _SubscriptionPlansDialog extends StatefulWidget {
 
 class _SubscriptionPlansDialogState extends State<_SubscriptionPlansDialog> {
   bool _isMonthlyLoading = false;
-  bool _isQuarterlyLoading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -433,17 +433,7 @@ class _SubscriptionPlansDialogState extends State<_SubscriptionPlansDialog> {
               description: 'Access all videos for 1 month',
               isPopular: false,
               isLoading: _isMonthlyLoading,
-              onSubscribe: () => _handleSubscribe('monthly', 900, 'monthly'),
-            ),
-            const SizedBox(height: 12),
-            _PlanCard(
-              name: '3-Month Plan',
-              price: '₹2,300',
-              cycle: '3 months',
-              description: 'Access all videos for 3 months',
-              isPopular: true,
-              isLoading: _isQuarterlyLoading,
-              onSubscribe: () => _handleSubscribe('quarterly', 2300, 'quarterly'),
+              onSubscribe: _handleSubscribe,
             ),
             
             const SizedBox(height: 24),
@@ -499,19 +489,9 @@ class _SubscriptionPlansDialogState extends State<_SubscriptionPlansDialog> {
     );
   }
 
-  Future<void> _handleSubscribe(String planType, int amount, String billingCycle) async {
-    // Set appropriate loading state based on plan type
-    if (planType == 'monthly') {
-      if (_isMonthlyLoading) return;
-      setState(() {
-        _isMonthlyLoading = true;
-      });
-    } else {
-      if (_isQuarterlyLoading) return;
-      setState(() {
-        _isQuarterlyLoading = true;
-      });
-    }
+  Future<void> _handleSubscribe() async {
+    if (_isMonthlyLoading) return;
+    setState(() => _isMonthlyLoading = true);
 
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -520,22 +500,7 @@ class _SubscriptionPlansDialogState extends State<_SubscriptionPlansDialog> {
         return;
       }
 
-      // Generate payment ID
-      final paymentId = 'sub_${DateTime.now().millisecondsSinceEpoch}_$planType';
-      
-      // Process payment using PaymentService
-      final result = await PaymentService.processPayment(
-        paymentId: paymentId,
-        amount: amount,
-        description: '$planType subscription plan',
-        paymentType: 'subscription',
-        itemId: planType,
-        metadata: {
-          'planType': planType,
-          'billingCycle': billingCycle,
-          'amount': amount,
-        },
-      );
+      final result = await OnlineSubscriptionService.purchaseMonthly();
 
       // Check if payment was initiated successfully (not completed yet)
       if (result['success'] == true) {
@@ -544,25 +509,19 @@ class _SubscriptionPlansDialogState extends State<_SubscriptionPlansDialog> {
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Payment gateway opened. Complete payment to unlock videos.'),
+              content: Text('Complete the purchase to unlock videos.'),
               backgroundColor: Color(0xFF4F46E5),
             ),
           );
         }
       } else {
-        _showError('Failed to open payment gateway. Please try again.');
+        _showError(result['message'] ?? 'Failed to start purchase. Please try again.');
       }
     } catch (e) {
       _showError('Payment failed: ${e.toString()}');
     } finally {
       if (mounted) {
-        setState(() {
-          if (planType == 'monthly') {
-            _isMonthlyLoading = false;
-          } else {
-            _isQuarterlyLoading = false;
-          }
-        });
+        setState(() => _isMonthlyLoading = false);
       }
     }
   }
