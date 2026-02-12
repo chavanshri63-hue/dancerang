@@ -41,15 +41,12 @@ class PaymentService {
 
   /// Initialize payment service
   static void initialize() {
+    if (kIsWeb) return;
     if (_razorpay != null) return;
     _razorpay = Razorpay();
     _razorpay!.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
     _razorpay!.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
     _razorpay!.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
-    // Best-effort: load Razorpay key from Firestore if not provided via --dart-define
-    // Firestore fetch is lightweight; cached in memory for this process.
-    // Do not block app startup; background load.
-    // ignore: discarded_futures
     _ensureRazorpayKeyLoaded();
   }
 
@@ -80,6 +77,13 @@ class PaymentService {
     Map<String, dynamic>? metadata,
   }) async {
     try {
+      if (kIsWeb) {
+        return {
+          'success': false,
+          'message': 'Online payments are not supported on web. Please use the mobile app.',
+        };
+      }
+
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         throw Exception('User not authenticated');

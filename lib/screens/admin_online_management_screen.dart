@@ -2138,7 +2138,7 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
                 subtitle: const Text('Live videos are shown with LIVE badge', style: TextStyle(color: Colors.white70)),
                 value: _isLive,
                 onChanged: (v) => setState(() => _isLive = v),
-                activeThumbColor: const Color(0xFFE53935),
+                thumbColor: const WidgetStatePropertyAll(Color(0xFFE53935)),
               ),
             ],
           ),
@@ -2500,7 +2500,7 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
       subtitle: const Text('Requires subscription to view', style: TextStyle(color: Colors.white70)),
       value: _isPaidContent,
       onChanged: (v) => setState(() => _isPaidContent = v),
-      activeThumbColor: const Color(0xFFE53935),
+      thumbColor: const WidgetStatePropertyAll(Color(0xFFE53935)),
     );
   }
 
@@ -2678,7 +2678,7 @@ class _StyleEditDialogState extends State<_StyleEditDialog> {
                 subtitle: const Text('Show this style in the app', style: TextStyle(color: Colors.white70)),
                 value: _isActive,
                 onChanged: (value) => setState(() => _isActive = value),
-                activeThumbColor: const Color(0xFFE53935),
+                thumbColor: const WidgetStatePropertyAll(Color(0xFFE53935)),
               ),
             ],
           ),
@@ -2971,7 +2971,7 @@ class _LiveStreamDialogState extends State<_LiveStreamDialog> {
               title: const Text("Schedule for Later", style: TextStyle(color: Colors.white)),
               value: _isScheduled,
               onChanged: (value) => setState(() => _isScheduled = value),
-              activeThumbColor: const Color(0xFFE53935),
+              thumbColor: const WidgetStatePropertyAll(Color(0xFFE53935)),
             ),
             
             if (_isScheduled) ...[

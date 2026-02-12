@@ -3777,7 +3777,7 @@ class _ClassesTabState extends State<ClassesTab> {
                 onChanged: (value) {
                   // Handle notification toggle
                 },
-                activeThumbColor: const Color(0xFFE53935),
+                thumbColor: const WidgetStatePropertyAll(Color(0xFFE53935)),
               ),
             ),
             ListTile(

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:qr_code_scanner/qr_code_scanner.dart';
+import '../utils/qr_stub.dart';
 import '../widgets/glassmorphism_app_bar.dart';
 import '../services/live_attendance_service.dart';
 

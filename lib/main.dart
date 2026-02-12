@@ -126,29 +126,30 @@ Future<void> _initializeFirebaseAndServices() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Setup FCM background handler
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  if (!kIsWeb) {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  }
   
   try {
-    // Initialize FCM service
-    await FCMService.initialize();
+    if (!kIsWeb) {
+      await FCMService.initialize();
+    }
   } catch (e) {
     if (kDebugMode) {
       print('FCM service initialization error: $e');
     }
   }
 
-  // Re-initialize FCM when user logs in (to save token)
   FirebaseAuth.instance.authStateChanges().listen((user) async {
     if (user != null) {
-      // User logged in - ensure FCM token is saved
-      FCMService.initialize().catchError((e) {
-        if (kDebugMode) {
-          print('Error re-initializing FCM after login: $e');
-        }
-      });
+      if (!kIsWeb) {
+        FCMService.initialize().catchError((e) {
+          if (kDebugMode) {
+            print('Error re-initializing FCM after login: $e');
+          }
+        });
+      }
       
-      // Send welcome notification
       try {
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
@@ -157,9 +158,6 @@ Future<void> _initializeFirebaseAndServices() async {
         final userData = userDoc.data();
         final userName = userData?['name'] as String? ?? 'User';
         
-        // Check if this is first login today (to avoid multiple notifications)
-        // IMPORTANT: DateTime.subtract returns a new instance; it does not mutate.
-        // Use a midnight boundary for "today".
         final now = DateTime.now();
         final todayStart = DateTime(now.year, now.month, now.day);
         final welcomeCheck = await FirebaseFirestore.instance
@@ -178,7 +176,6 @@ Future<void> _initializeFirebaseAndServices() async {
           );
         }
       } catch (e) {
-        // Ignore notification errors
       }
     }
   });

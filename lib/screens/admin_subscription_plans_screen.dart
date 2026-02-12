@@ -166,7 +166,7 @@ class _EditPlanDialogState extends State<_EditPlanDialog> {
               title: const Text('Enable Trial', style: TextStyle(color: Colors.white)),
               value: _trial,
               onChanged: (v) => setState(() => _trial = v),
-              activeThumbColor: const Color(0xFFE53935),
+              thumbColor: const WidgetStatePropertyAll(Color(0xFFE53935)),
             ),
             if (_trial) TextField(keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Trial Days'), onChanged: (v) => _trialDays = int.tryParse(v) ?? 7),
           ],

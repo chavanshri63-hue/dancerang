@@ -11,7 +11,7 @@ class IapService {
   IapService._();
 
   static final IapService instance = IapService._();
-  static final InAppPurchase _iap = InAppPurchase.instance;
+  static InAppPurchase get _iap => InAppPurchase.instance;
 
   StreamSubscription<List<PurchaseDetails>>? _purchaseSub;
   Completer<Map<String, dynamic>>? _purchaseCompleter;

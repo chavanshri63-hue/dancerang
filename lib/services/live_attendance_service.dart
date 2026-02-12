@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:qr_code_scanner/qr_code_scanner.dart';
+import '../utils/qr_stub.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 // String extension for capitalization
