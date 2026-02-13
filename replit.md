@@ -6,17 +6,27 @@ DanceRang is a comprehensive dance studio management Flutter application built f
 ## Project Architecture
 - **Framework**: Flutter (Dart) with web support
 - **Backend**: Firebase (Auth, Firestore, Cloud Functions, Storage, Analytics, Messaging)
+- **State Management**: Provider (AppAuthProvider for auth state, role, role keys)
 - **Payment**: Razorpay integration (mobile-only)
 - **Build**: Flutter web build served via Python HTTP server
 
 ## Project Structure
 - `lib/` - Main Dart source code
-  - `main.dart` - App entry point with Firebase initialization
+  - `main.dart` - App entry point with Firebase initialization and MultiProvider
+  - `providers/` - State management providers
+    - `auth_provider.dart` - AppAuthProvider (user state, role, role keys)
   - `screens/` - UI screens (login, home, admin dashboards, etc.)
+    - `home_screen.dart` - Main home shell with bottom navigation (uses part files)
+    - `tabs/` - Home screen tab files (part of home_screen.dart)
+      - `home_tab.dart` - Home feed, banners, features grid
+      - `classes_tab.dart` - Class listings, details, packages
+      - `studio_tab.dart` - Studio booking, availability
+      - `online_tab.dart` - Online videos, style cards
+      - `profile_tab.dart` - Profile, enrollment, payments, admin stats
   - `services/` - Business logic services (payment, attendance, notifications, etc.)
   - `models/` - Data models
   - `widgets/` - Reusable UI components
-  - `config/` - App configuration
+  - `config/` - App configuration (no hardcoded secrets)
   - `utils/` - Utility files including web stubs
 - `web/` - Web-specific files (index.html, manifest.json)
 - `android/` - Android platform files
@@ -30,14 +40,27 @@ The workflow builds Flutter for web and serves the output on port 5000:
 flutter build web --release --base-href "/" && python3 serve.py
 ```
 
+## Security Notes
+- Admin/Faculty role keys loaded from Firestore (`appSettings/roleKeys`) as primary source
+- Build-time secrets via `--dart-define` (ADMIN_KEY, FACULTY_KEY) as fallback
+- No hardcoded credentials in source code
+- Clear error messages when keys are not configured
+
 ## Web Compatibility Notes
 - `qr_code_scanner` replaced with local stub (`lib/utils/qr_stub.dart`) - QR scanning is mobile-only
 - `razorpay_flutter` guarded with `kIsWeb` check - payments are mobile-only
 - Firebase Messaging (FCM) guarded with `kIsWeb` - push notifications not supported on web in this environment
 - `in_app_purchase` lazy-loaded to avoid web initialization errors
-- SDK constraint relaxed to `^3.8.0` for compatibility with available Flutter SDK
+- SDK constraint set to `^3.8.0` for compatibility with available Flutter SDK
 
 ## Recent Changes
+- 2026-02-13: Security & architecture refactoring
+  - Removed hardcoded admin/faculty keys from app_config.dart
+  - Added Provider package with AppAuthProvider for centralized auth state
+  - Wired MultiProvider into main.dart
+  - Split home_screen.dart (11,466 lines) into 6 files using part/part of directives
+  - Updated login_screen.dart and manage_role_keys_screen.dart to use Firestore-first key loading
+  - Added environment SDK constraint to pubspec.yaml
 - 2026-02-12: Initial Replit setup - adapted Flutter mobile app for web deployment
   - Lowered Dart SDK constraint from ^3.9.2 to ^3.8.0
   - Replaced deprecated `activeThumbColor` with `thumbColor` using `WidgetStatePropertyAll`

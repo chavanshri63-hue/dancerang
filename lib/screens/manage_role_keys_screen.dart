@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math';
-import '../config/app_config.dart';
+
 
 class ManageRoleKeysScreen extends StatefulWidget {
   const ManageRoleKeysScreen({super.key});
@@ -49,27 +49,16 @@ class _ManageRoleKeysScreenState extends State<ManageRoleKeysScreen> {
           _adminKeyController.text = (data['adminKey']?.toString() ?? '').trim();
           _facultyKeyController.text = (data['facultyKey']?.toString() ?? '').trim();
         });
-      } else {
-        // If no keys exist, use defaults from AppConfig
-        setState(() {
-          _adminKeyController.text = AppConfig.adminKey;
-          _facultyKeyController.text = AppConfig.facultyKey;
-        });
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Failed to load keys. Please try again.'),
             backgroundColor: Colors.red,
           ),
         );
       }
-      // Fallback to defaults
-      setState(() {
-        _adminKeyController.text = AppConfig.adminKey;
-        _facultyKeyController.text = AppConfig.facultyKey;
-      });
     } finally {
       if (mounted) {
         setState(() {
@@ -111,11 +100,10 @@ class _ManageRoleKeysScreenState extends State<ManageRoleKeysScreen> {
 
   Future<void> _setDefaultKeys() async {
     setState(() {
-      _adminKeyController.text = AppConfig.adminKey;
-      _facultyKeyController.text = AppConfig.facultyKey;
+      _adminKeyController.text = _generateRandomKey();
+      _facultyKeyController.text = _generateRandomKey();
     });
-    
-    // Auto-save default keys to Firestore
+
     await _saveKeys();
   }
 
@@ -348,7 +336,7 @@ class _ManageRoleKeysScreenState extends State<ManageRoleKeysScreen> {
                   ElevatedButton.icon(
                     onPressed: _isSaving ? null : _setDefaultKeys,
                     icon: const Icon(Icons.restore),
-                    label: const Text('Set Default Keys (DRADMIN2025 / DRFAC2025)'),
+                    label: const Text('Generate & Save New Keys'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2C2C2C),
                       foregroundColor: Colors.white,

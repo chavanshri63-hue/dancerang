@@ -65,21 +65,23 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           });
         }
       } else {
-        // Fallback to AppConfig defaults if Firestore doesn't have keys
+        final envAdmin = AppConfig.adminKey;
+        final envFaculty = AppConfig.facultyKey;
         if (mounted) {
           setState(() {
-            _adminKey = AppConfig.adminKey;
-            _facultyKey = AppConfig.facultyKey;
+            _adminKey = envAdmin.isNotEmpty ? envAdmin : null;
+            _facultyKey = envFaculty.isNotEmpty ? envFaculty : null;
             _keysLoaded = true;
           });
         }
       }
     } catch (e) {
-      // Fallback to AppConfig defaults on error
+      final envAdmin = AppConfig.adminKey;
+      final envFaculty = AppConfig.facultyKey;
       if (mounted) {
         setState(() {
-          _adminKey = AppConfig.adminKey;
-          _facultyKey = AppConfig.facultyKey;
+          _adminKey = envAdmin.isNotEmpty ? envAdmin : null;
+          _facultyKey = envFaculty.isNotEmpty ? envFaculty : null;
           _keysLoaded = true;
         });
       }
@@ -148,7 +150,6 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       await _loadRoleKeys();
     }
 
-    // Role key validation (client-side guard only)
     if (_selectedRole != 'Student') {
       final key = _specialKeyController.text.trim();
       if (key.isEmpty) {
@@ -157,23 +158,20 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         });
         return;
       }
-      
-      // Normalize both keys for comparison (trim and case-sensitive)
-      final normalizedInputKey = key.trim();
-      final bool valid = (_selectedRole == 'Admin' && _adminKey != null && normalizedInputKey == _adminKey!.trim()) ||
-                        (_selectedRole == 'Faculty' && _facultyKey != null && normalizedInputKey == _facultyKey!.trim());
-      
-      if (!valid) {
-        // Fallback: Also check against AppConfig directly if Firestore keys don't match
-        final bool fallbackValid = (_selectedRole == 'Admin' && normalizedInputKey == AppConfig.adminKey.trim()) ||
-                                   (_selectedRole == 'Faculty' && normalizedInputKey == AppConfig.facultyKey.trim());
-        
-        if (!fallbackValid) {
-          setState(() {
-            _errorMessage = 'Invalid $_selectedRole key. Please check and try again.';
-          });
-          return;
-        }
+
+      final expectedKey = _selectedRole == 'Admin' ? _adminKey : _facultyKey;
+      if (expectedKey == null || expectedKey.isEmpty) {
+        setState(() {
+          _errorMessage = '$_selectedRole keys have not been configured yet. Please contact the administrator.';
+        });
+        return;
+      }
+
+      if (key != expectedKey.trim()) {
+        setState(() {
+          _errorMessage = 'Invalid $_selectedRole key. Please check and try again.';
+        });
+        return;
       }
     }
     if (_phoneController.text.trim().isEmpty) {

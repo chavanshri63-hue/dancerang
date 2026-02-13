@@ -5,6 +5,7 @@ import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:provider/provider.dart';
 import 'dart:async';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
@@ -21,6 +22,7 @@ import 'services/class_enrollment_expiry_service.dart';
 import 'services/birthday_service.dart';
 import 'services/fcm_service.dart';
 import 'config/app_config.dart';
+import 'providers/auth_provider.dart';
 
 
 // Initialize non-critical services in background for better performance
@@ -197,7 +199,14 @@ Future<void> _initializeFirebaseAndServices() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AppAuthProvider()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
