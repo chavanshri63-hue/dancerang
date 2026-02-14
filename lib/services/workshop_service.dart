@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
-import 'live_notification_service.dart';
 
 class WorkshopService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -344,35 +343,34 @@ class WorkshopService {
     ];
   }
 
-  /// Send notification about new workshop
   static Future<void> _sendNewWorkshopNotification(Map<String, dynamic> workshopData) async {
     try {
-      final title = workshopData['title'] as String? ?? 'New Workshop';
+      final workshopTitle = workshopData['title'] as String? ?? 'New Workshop';
       final instructor = workshopData['instructor'] as String? ?? 'Instructor';
       final date = workshopData['date'] as String?;
       final time = workshopData['time'] as String?;
-      
-      // Get all students
-      final studentsSnapshot = await _firestore
-          .collection('users')
-          .where('role', isEqualTo: 'Student')
-          .get();
-      
-      for (final studentDoc in studentsSnapshot.docs) {
-        try {
-          await LiveNotificationService.sendNewWorkshopNotification(
-            workshopTitle: title,
-            instructor: instructor,
-            userId: studentDoc.id,
-            date: date,
-            time: time,
-          );
-        } catch (e) {
-          // Continue to next student
-        }
-      }
+
+      final body = date != null && time != null
+          ? '"$workshopTitle" with $instructor - $date at $time'
+          : '"$workshopTitle" with $instructor';
+
+      await _firestore.collection('notifications').add({
+        'title': '🆕 New Workshop Available!',
+        'body': body,
+        'message': body,
+        'type': 'new_workshop',
+        'priority': 'high',
+        'target': 'students',
+        'isScheduled': false,
+        'createdAt': FieldValue.serverTimestamp(),
+        'data': {
+          'workshopTitle': workshopTitle,
+          'instructor': instructor,
+          'date': date,
+          'time': time,
+        },
+      });
     } catch (e) {
-      // Ignore errors
     }
   }
 

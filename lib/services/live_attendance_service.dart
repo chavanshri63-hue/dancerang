@@ -505,6 +505,30 @@ class LiveAttendanceService {
             updates['completedAt'] = FieldValue.serverTimestamp();
           }
           await canonicalEnrollment.reference.update(updates);
+
+          if (newRemaining == 2) {
+            try {
+              await _firestore
+                  .collection('users')
+                  .doc(userId)
+                  .collection('notifications')
+                  .add({
+                'title': '⚠️ Only 2 Classes Remaining!',
+                'body': 'You have only 2 sessions left in "$className". Please renew your package to continue.',
+                'message': 'You have only 2 sessions left in "$className". Please renew your package to continue.',
+                'type': 'low_sessions_warning',
+                'priority': 'high',
+                'read': false,
+                'isRead': false,
+                'createdAt': FieldValue.serverTimestamp(),
+                'data': {
+                  'classId': classId,
+                  'className': className,
+                  'remainingSessions': 2,
+                },
+              });
+            } catch (_) {}
+          }
         } catch (e) {
         }
       }

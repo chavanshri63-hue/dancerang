@@ -8,7 +8,6 @@ import '../models/package_model.dart';
 import '../services/dance_styles_service.dart';
 import '../services/branches_service.dart';
 import '../services/event_controller.dart';
-import '../services/live_notification_service.dart';
 
 class AdminClassesManagementScreen extends StatefulWidget {
   const AdminClassesManagementScreen({super.key});
@@ -371,10 +370,8 @@ class _AdminClassesManagementScreenState extends State<AdminClassesManagementScr
     );
   }
 
-  /// Send notification about new class
   Future<void> _sendNewClassNotification(Map<String, dynamic> classData, String classId) async {
     try {
-      // Convert dateTime from Timestamp to String
       String dateTimeStr = 'TBA';
       if (classData['dateTime'] != null) {
         if (classData['dateTime'] is Timestamp) {
@@ -384,34 +381,29 @@ class _AdminClassesManagementScreenState extends State<AdminClassesManagementScr
           dateTimeStr = classData['dateTime'] as String;
         }
       } else if (classData['days'] != null && classData['startTime'] != null) {
-        // New format: days + startTime
         final days = (classData['days'] as List).join(', ');
         dateTimeStr = '$days ${classData['startTime']}';
       }
 
       final className = classData['name'] as String? ?? 'New Class';
       final instructor = classData['instructor'] as String? ?? classData['instructorName'] as String? ?? 'Instructor';
-      
-      // Get all students
-      final studentsSnapshot = await _firestore
-          .collection('users')
-          .where('role', isEqualTo: 'Student')
-          .get();
-      
-      for (final studentDoc in studentsSnapshot.docs) {
-        try {
-          await LiveNotificationService.sendNewClassNotification(
-            className: className,
-            instructor: instructor,
-            userId: studentDoc.id,
-            dateTime: dateTimeStr,
-          );
-        } catch (e) {
-          // Continue to next student
-        }
-      }
+
+      await _firestore.collection('notifications').add({
+        'title': '🆕 New Class Available!',
+        'body': '"$className" with $instructor - $dateTimeStr',
+        'message': '"$className" with $instructor - $dateTimeStr',
+        'type': 'new_class',
+        'priority': 'high',
+        'target': 'students',
+        'isScheduled': false,
+        'createdAt': FieldValue.serverTimestamp(),
+        'data': {
+          'classId': classId,
+          'className': className,
+          'instructor': instructor,
+        },
+      });
     } catch (e) {
-      // Error sending new class notifications
     }
   }
 }

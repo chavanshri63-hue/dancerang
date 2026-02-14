@@ -20,6 +20,7 @@ export {checkExpiredSubscriptionsManual} from "./subscription-expiry";
 export {cleanNotificationData} from "./clean-notifications";
 export {sendAdminNotification} from "./send-notifications";
 export {sendUserNotification} from "./user-notifications";
+export {onApprovalCreated, onStudioBookingCreated} from "./admin-notifications";
 export {verifyPlaySubscription} from "./play-billing";
 // New: admin migration callable
 
