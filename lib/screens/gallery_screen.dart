@@ -1259,14 +1259,16 @@ class _GalleryScreenState extends State<GalleryScreen> {
       _isLoading = true;
     });
 
+    UploadTask? activeUploadTask;
+    bool uploadCancelled = false;
+
     try {
-      // Get file size for progress calculation
       final file = File(_selectedFile!.path);
       final fileSize = await file.length();
       final fileSizeMB = (fileSize / (1024 * 1024)).toStringAsFixed(1);
       
-      // Show loading dialog with progress
       _UploadProgressDialogState? progressDialogState;
+      if (!mounted) return;
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -1278,16 +1280,18 @@ class _GalleryScreenState extends State<GalleryScreen> {
                 fileSize: fileSizeMB,
                 mediaType: _selectedMediaType,
                 onStateCreated: (state) => progressDialogState = state,
+                onCancel: _selectedMediaType == 'Video' ? () {
+                  uploadCancelled = true;
+                  activeUploadTask?.cancel();
+                } : null,
               );
             },
           );
         },
       );
 
-      bool wakelockEnabled = false;
       if (_selectedMediaType == 'Video') {
         WakelockPlus.enable();
-        wakelockEnabled = true;
       }
 
       final String fileName = '${DateTime.now().millisecondsSinceEpoch}_${_selectedFile!.name}';
@@ -1297,7 +1301,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
           .child(_selectedCategoryForUpload.toLowerCase())
           .child(fileName);
 
-      final UploadTask uploadTask = ref.putFile(
+      activeUploadTask = ref.putFile(
         File(_selectedFile!.path),
         SettableMetadata(
           contentType: _selectedMediaType == 'Photo' 
@@ -1306,16 +1310,16 @@ class _GalleryScreenState extends State<GalleryScreen> {
         ),
       );
 
-      // Listen to upload progress
-      _uploadSubscription = uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-        final progress = snapshot.bytesTransferred / snapshot.totalBytes;
-        // Update progress in dialog
-        if (context.mounted && progressDialogState != null) {
-          progressDialogState!.updateProgress(progress);
+      _uploadSubscription = activeUploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
+        if (snapshot.totalBytes > 0) {
+          final progress = snapshot.bytesTransferred / snapshot.totalBytes;
+          if (progress.isFinite && progressDialogState != null) {
+            progressDialogState!.updateProgress(progress);
+          }
         }
       });
 
-      final TaskSnapshot snapshot = await uploadTask;
+      final TaskSnapshot snapshot = await activeUploadTask;
       final String downloadUrl = await snapshot.ref.getDownloadURL();
 
       await _uploadSubscription?.cancel();
@@ -1337,15 +1341,15 @@ class _GalleryScreenState extends State<GalleryScreen> {
         rethrow;
       }
 
+      if (!mounted) return;
       Navigator.pop(context);
-      
       Navigator.pop(context);
 
-      // Clear form
       _selectedFile = null;
       _titleController.clear();
       _descriptionController.clear();
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${_selectedMediaType} uploaded successfully!'),
@@ -1354,28 +1358,39 @@ class _GalleryScreenState extends State<GalleryScreen> {
         ),
       );
 
-      // Refresh gallery
       _refreshGallery();
 
     } catch (e) {
       await _uploadSubscription?.cancel();
       
-      Navigator.pop(context);
+      if (mounted) Navigator.pop(context);
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to upload media. Please check your connection and try again.'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (mounted && !uploadCancelled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to upload media. Please check your connection and try again.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else if (mounted && uploadCancelled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Upload cancelled'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } finally {
       if (_selectedMediaType == 'Video') {
         WakelockPlus.disable();
       }
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -1385,7 +1400,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
       XFile? file;
       
       if (_selectedMediaType == 'Photo') {
-        file = await picker.pickImage(source: ImageSource.gallery);
+        file = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1920, maxHeight: 1920, imageQuality: 85);
       } else {
         file = await picker.pickVideo(source: ImageSource.gallery);
       }
@@ -1420,7 +1435,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
       XFile? file;
       
       if (_selectedMediaType == 'Photo') {
-        file = await picker.pickImage(source: ImageSource.camera);
+        file = await picker.pickImage(source: ImageSource.camera, maxWidth: 1920, maxHeight: 1920, imageQuality: 85);
       } else {
         file = await picker.pickVideo(source: ImageSource.camera);
       }
@@ -2151,18 +2166,19 @@ class _InlineVideoPlayerState extends State<_InlineVideoPlayer> {
   }
 }
 
-// Upload Progress Dialog
 class _UploadProgressDialog extends StatefulWidget {
   final String fileName;
   final String fileSize;
   final String mediaType;
   final Function(_UploadProgressDialogState)? onStateCreated;
+  final VoidCallback? onCancel;
 
   const _UploadProgressDialog({
     required this.fileName,
     required this.fileSize,
     required this.mediaType,
     this.onStateCreated,
+    this.onCancel,
   });
 
   @override
@@ -2176,16 +2192,16 @@ class _UploadProgressDialogState extends State<_UploadProgressDialog> {
   @override
   void initState() {
     super.initState();
-    // Notify parent about this state instance
     widget.onStateCreated?.call(this);
   }
 
   void updateProgress(double progress) {
     if (mounted) {
+      final safeProgress = (progress.isFinite ? progress : 0.0).clamp(0.0, 1.0);
       setState(() {
-        _progress = progress;
-        if (progress < 1.0) {
-          _status = 'Uploading... ${(progress * 100).toInt()}%';
+        _progress = safeProgress;
+        if (safeProgress < 1.0) {
+          _status = 'Uploading... ${(safeProgress * 100).toInt()}%';
         } else {
           _status = 'Finalizing...';
         }
@@ -2205,15 +2221,12 @@ class _UploadProgressDialogState extends State<_UploadProgressDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Media type icon
             Icon(
               widget.mediaType == 'Photo' ? Icons.image : Icons.videocam,
               color: const Color(0xFFE53935),
               size: 48,
             ),
             const SizedBox(height: 16),
-            
-            // Title
             Text(
               'Uploading ${widget.mediaType}',
               style: const TextStyle(
@@ -2223,8 +2236,6 @@ class _UploadProgressDialogState extends State<_UploadProgressDialog> {
               ),
             ),
             const SizedBox(height: 8),
-            
-            // File name
             Text(
               widget.fileName,
               style: const TextStyle(
@@ -2236,8 +2247,6 @@ class _UploadProgressDialogState extends State<_UploadProgressDialog> {
               overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 4),
-            
-            // File size
             Text(
               '${widget.fileSize} MB',
               style: const TextStyle(
@@ -2246,17 +2255,13 @@ class _UploadProgressDialogState extends State<_UploadProgressDialog> {
               ),
             ),
             const SizedBox(height: 24),
-            
-            // Progress bar
             LinearProgressIndicator(
               value: _progress,
-              backgroundColor: Colors.white.withOpacity( 0.2),
+              backgroundColor: Colors.white.withOpacity(0.2),
               valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFE53935)),
               minHeight: 8,
             ),
             const SizedBox(height: 16),
-            
-            // Status text
             Text(
               _status,
               style: const TextStyle(
@@ -2265,8 +2270,6 @@ class _UploadProgressDialogState extends State<_UploadProgressDialog> {
               ),
             ),
             const SizedBox(height: 8),
-            
-            // Progress percentage
             Text(
               '${(_progress * 100).toInt()}%',
               style: const TextStyle(
@@ -2276,27 +2279,25 @@ class _UploadProgressDialogState extends State<_UploadProgressDialog> {
               ),
             ),
             const SizedBox(height: 16),
-            
-            // Note for videos
-            if (widget.mediaType == 'Video')
+            if (widget.mediaType == 'Video') ...[
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity( 0.1),
+                  color: Colors.orange.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: Colors.orange.withOpacity( 0.3),
+                    color: Colors.orange.withOpacity(0.3),
                   ),
                 ),
-                child: Row(
+                child: const Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.info_outline,
                       color: Colors.orange,
                       size: 16,
                     ),
-                    const SizedBox(width: 8),
-                    const Expanded(
+                    SizedBox(width: 8),
+                    Expanded(
                       child: Text(
                         'Videos take longer to upload due to file size',
                         style: TextStyle(
@@ -2308,6 +2309,17 @@ class _UploadProgressDialogState extends State<_UploadProgressDialog> {
                   ],
                 ),
               ),
+              if (widget.onCancel != null) ...[
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: widget.onCancel,
+                  child: const Text(
+                    'Cancel Upload',
+                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
+                ),
+              ],
+            ],
           ],
         ),
       ),

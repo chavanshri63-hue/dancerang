@@ -61,6 +61,14 @@ flutter build web --release --base-href "/" && python3 serve.py
   - Fixed new class notifications: replaced local per-student loop with single `notifications` collection write, triggering existing `sendAdminNotification` Cloud Function for FCM broadcast
   - Fixed new workshop notifications: same approach as class notifications
   - Removed unused `LiveNotificationService` imports from admin_classes_management_screen and workshop_service
+- 2026-02-14: Upload UX polish (mobile-only, minimal UI additions)
+  - Gallery video upload: added "Cancel Upload" button to progress dialog, wired to UploadTask.cancel()
+  - Online video upload: Cancel button changes to "Cancel Upload" during active upload, cancels the UploadTask
+  - Both flows show "Upload cancelled" message instead of error when user cancels
+  - Gallery upload: added `mounted` guards before Navigator.pop and ScaffoldMessenger after upload completes
+  - Gallery progress listener: added NaN/infinity guard on progress value (totalBytes > 0 check + isFinite)
+  - Progress dialog `updateProgress`: added safe clamp(0.0, 1.0) with isFinite guard
+  - Gallery photo picks (gallery + camera): added `maxWidth: 1920, maxHeight: 1920, imageQuality: 85` for compression
 - 2026-02-14: Upload data safety fixes (mobile-only, no UI/behavior changes)
   - Gallery upload: if Firestore write fails after Storage upload, the orphaned Storage file is automatically deleted (rollback)
   - Online video upload: if Firestore write fails after video/thumbnail upload, all uploaded Storage files are cleaned up (rollback)

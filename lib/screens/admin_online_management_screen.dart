@@ -2163,7 +2163,10 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.white70))),
+        TextButton(
+          onPressed: _isUploading ? _cancelUpload : () => Navigator.pop(context),
+          child: Text(_isUploading ? 'Cancel Upload' : 'Cancel', style: const TextStyle(color: Colors.white70)),
+        ),
         ElevatedButton(
           onPressed: _loading ? null : _save,
           style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE53935)),
@@ -2175,14 +2178,22 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
     );
   }
 
+  UploadTask? _activeUploadTask;
+  bool _uploadCancelled = false;
+
+  void _cancelUpload() {
+    _uploadCancelled = true;
+    _activeUploadTask?.cancel();
+  }
+
   Future<void> _save() async {
     setState(() { 
       _loading = true;
       _isUploading = true;
       _uploadProgress = 0.0;
+      _uploadCancelled = false;
     });
     try {
-      // Require video file for new items
       if (widget.videoId == null && _videoFile == null) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a video file')));
         setState(() { 
@@ -2192,7 +2203,6 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
         return;
       }
 
-      // Ensure status is set to published for new videos
       if (widget.videoId == null && _status != 'published') {
         _status = 'published';
       }
@@ -2210,15 +2220,18 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
         setState(() => _uploadProgress = 0.1);
         videoRef = storage.ref().child('online_videos/$ts.mp4');
         
-        final uploadTask = videoRef.putFile(_videoFile!);
+        _activeUploadTask = videoRef.putFile(_videoFile!);
         
         _uploadSubscription?.cancel();
-        _uploadSubscription = uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-          final progress = snapshot.bytesTransferred / snapshot.totalBytes;
-          if (mounted) setState(() => _uploadProgress = progress);
+        _uploadSubscription = _activeUploadTask!.snapshotEvents.listen((TaskSnapshot snapshot) {
+          if (snapshot.totalBytes > 0) {
+            final progress = snapshot.bytesTransferred / snapshot.totalBytes;
+            if (progress.isFinite && mounted) setState(() => _uploadProgress = progress);
+          }
         });
         
-        await uploadTask;
+        await _activeUploadTask!;
+        _activeUploadTask = null;
         videoUrl = await videoRef.getDownloadURL();
         if (mounted) setState(() => _uploadProgress = 0.8);
       }
@@ -2291,15 +2304,23 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
         Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && !_uploadCancelled) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Failed to upload video. Please check your connection and try again.'),
             backgroundColor: Colors.red,
           ),
         );
+      } else if (mounted && _uploadCancelled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Upload cancelled'),
+            backgroundColor: Colors.orange,
+          ),
+        );
       }
     } finally {
+      _activeUploadTask = null;
       if (_videoFile != null) {
         WakelockPlus.disable();
       }
