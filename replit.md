@@ -54,6 +54,13 @@ flutter build web --release --base-href "/" && python3 serve.py
 - SDK constraint set to `^3.8.0` for compatibility with available Flutter SDK
 
 ## Recent Changes
+- 2026-02-14: Notification audit & fixes (mobile-focused, no UI/behavior changes)
+  - Added "2 classes remaining" warning: writes to student's Firestore notification subcollection when attendance marking reduces remainingSessions to 2
+  - Created Cloud Function `onApprovalCreated` (Firestore trigger on `approvals/{id}`) to notify all admin/faculty of new cash payment and join requests via FCM + in-app
+  - Created Cloud Function `onStudioBookingCreated` (Firestore trigger on `studioBookings/{id}`) to notify all admin/faculty of new studio bookings via FCM + in-app
+  - Fixed new class notifications: replaced local per-student loop with single `notifications` collection write, triggering existing `sendAdminNotification` Cloud Function for FCM broadcast
+  - Fixed new workshop notifications: same approach as class notifications
+  - Removed unused `LiveNotificationService` imports from admin_classes_management_screen and workshop_service
 - 2026-02-14: Performance & stability optimizations (mobile-focused, no UI/behavior changes)
   - Fixed memory leaks: Added stream subscription tracking and cancellation in qr_scanner_screen, admin_online_management_screen, fcm_service (3 subscriptions), iap_service
   - Added `mounted` guards before 572+ setState calls that follow async operations across 24+ screen files to prevent setState-after-dispose crashes
