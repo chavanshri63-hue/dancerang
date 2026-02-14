@@ -177,6 +177,15 @@
       ]
     },
     {
+      "name": "provider",
+      "version": "6.1.5+1",
+      "dependencies": [
+        "collection",
+        "flutter",
+        "nested"
+      ]
+    },
+    {
       "name": "printing",
       "version": "5.14.2",
       "dependencies": [
@@ -804,6 +813,13 @@
       ]
     },
     {
+      "name": "nested",
+      "version": "1.0.0",
+      "dependencies": [
+        "flutter"
+      ]
+    },
+    {
       "name": "plugin_platform_interface",
       "version": "2.1.8",
       "dependencies": [
@@ -1355,22 +1371,6 @@
       "name": "fixnum",
       "version": "1.1.1",
       "dependencies": []
-    },
-    {
-      "name": "provider",
-      "version": "6.1.5+1",
-      "dependencies": [
-        "collection",
-        "flutter",
-        "nested"
-      ]
-    },
-    {
-      "name": "nested",
-      "version": "1.0.0",
-      "dependencies": [
-        "flutter"
-      ]
     }
   ],
   "configVersion": 1
