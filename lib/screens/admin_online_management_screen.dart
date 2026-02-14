@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -1206,6 +1207,7 @@ class _AdminOnlineManagementScreenState extends State<AdminOnlineManagementScree
       }
       await batch.commit();
       
+      if (!mounted) return;
       setState(() {
         _selectedVideos.clear();
         _isBulkMode = false;
@@ -1256,6 +1258,7 @@ class _AdminOnlineManagementScreenState extends State<AdminOnlineManagementScree
     }
     await batch.commit();
     
+    if (!mounted) return;
     setState(() {
       _selectedVideos.clear();
       _isBulkMode = false;
@@ -1286,6 +1289,7 @@ class _AdminOnlineManagementScreenState extends State<AdminOnlineManagementScree
     }
     await batch.commit();
     
+    if (!mounted) return;
     setState(() {
       _selectedVideos.clear();
       _isBulkMode = false;
@@ -2034,6 +2038,7 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
   DateTime? _scheduledDate;
   double _uploadProgress = 0.0;
   bool _isUploading = false;
+  StreamSubscription? _uploadSubscription;
 
   @override
   void initState() {
@@ -2041,9 +2046,21 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
     if (widget.videoId != null) _load();
   }
 
+  @override
+  void dispose() {
+    _uploadSubscription?.cancel();
+    _title.dispose();
+    _desc.dispose();
+    _thumb.dispose();
+    _tags.dispose();
+    _instructor.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     final doc = await FirebaseFirestore.instance.collection('onlineVideos').doc(widget.videoId).get();
     final d = doc.data() ?? {};
+    if (!mounted) return;
     setState(() {
       _title.text = (d['title'] ?? '').toString();
       _desc.text = (d['description'] ?? '').toString();
@@ -2191,14 +2208,15 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
         // Upload with progress tracking
         final uploadTask = ref.putFile(_videoFile!);
         
-        uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
+        _uploadSubscription?.cancel();
+        _uploadSubscription = uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
           final progress = snapshot.bytesTransferred / snapshot.totalBytes;
-          setState(() => _uploadProgress = progress);
+          if (mounted) setState(() => _uploadProgress = progress);
         });
         
         await uploadTask;
         videoUrl = await ref.getDownloadURL();
-        setState(() => _uploadProgress = 0.8);
+        if (mounted) setState(() => _uploadProgress = 0.8);
       }
 
       if (_thumbFile != null) {
@@ -2206,6 +2224,8 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
         await ref.putFile(_thumbFile!);
         thumbUrl = await ref.getDownloadURL();
       }
+
+      if (!mounted) return;
 
       final tags = _tags.text
           .split(',')
@@ -2231,8 +2251,7 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      // Debug logging
-      setState(() => _uploadProgress = 0.9);
+      if (mounted) setState(() => _uploadProgress = 0.9);
       
       final col = FirebaseFirestore.instance.collection('onlineVideos');
       if (widget.videoId == null) {

@@ -6,6 +6,7 @@ import 'package:pinput/pinput.dart';
 import 'home_screen.dart';
 import 'profile_setup_screen.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import '../utils/error_handler.dart';
 // Use theme-driven AppBar instead of custom neon app bar
 
 class OTPVerificationScreen extends StatefulWidget {
@@ -88,8 +89,8 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
           });
         }
       }
-    } catch (e) {
-      // Set default dance background image on error
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading background image');
       if (mounted) {
         setState(() {
           _backgroundImageUrl = 'https://images.unsplash.com/photo-1508700929628-666bc8bd84ea?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80';
@@ -369,13 +370,8 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
           });
           // Refresh token to pick updated custom claims
           await FirebaseAuth.instance.currentUser?.getIdToken(true);
-        } catch (e) {
-          // Silently handle role update errors - don't show snackbar
-          // Login screen already validated the key, so if it fails here it's likely:
-          // 1. Network issue (will retry later)
-          // 2. Functions issue (non-critical for login)
-          // User can still proceed with login - role can be updated later if needed
-          // No need to show error snackbar as it's not blocking the login flow
+        } catch (e, stackTrace) {
+          ErrorHandler.handleError(e, stackTrace, context: 'setting user role');
         }
       }
 
@@ -408,7 +404,8 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
           (route) => false,
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'verifying OTP');
       setState(() {
         _isLoading = false;
       });
@@ -448,11 +445,12 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
         _isResendLoading = false;
       });
       _showSnackBar('Please go back and request a new OTP', isSuccess: false);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'resending OTP');
       setState(() {
         _isResendLoading = false;
       });
-      _showSnackBar('Error resending OTP: $e');
+      _showSnackBar(ErrorHandler.getUserFriendlyMessage(e));
     }
   }
 

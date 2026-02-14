@@ -7,6 +7,7 @@ import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'dart:async';
 import '../screens/receipt_screen.dart';
 import 'live_notification_service.dart';
+import '../utils/error_handler.dart';
 
 /// PaymentService handles all payment-related operations using Razorpay
 /// 
@@ -63,7 +64,8 @@ class PaymentService {
         _publicKeyId = keyId;
       } else {
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading Razorpay key');
     }
   }
 
@@ -208,24 +210,11 @@ class PaymentService {
         'error': userFriendlyError,
         'payment_id': paymentId,
       };
-    } catch (e) {
-      String userFriendlyError = 'Payment processing failed. Please try again.';
-      
-      // Provide more specific error messages
-      if (e.toString().contains('network')) {
-        userFriendlyError = 'Network error. Please check your internet connection.';
-      } else if (e.toString().contains('timeout')) {
-        userFriendlyError = 'Request timeout. Please try again.';
-      } else if (e.toString().contains('permission')) {
-        userFriendlyError = 'Permission denied. Please contact support.';
-      } else if (e.toString().contains('INVALID_AMOUNT') || 
-                 e.toString().contains('invalid amount')) {
-        userFriendlyError = 'Invalid payment amount. Please check the amount and try again.';
-      }
-      
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'processing payment');
       return {
         'success': false,
-        'error': userFriendlyError,
+        'error': ErrorHandler.getUserFriendlyMessage(e),
         'payment_id': paymentId,
       };
     }
@@ -277,8 +266,8 @@ class PaymentService {
           'created_at': FieldValue.serverTimestamp(),
           'updated_at': FieldValue.serverTimestamp(),
         });
-      } catch (e) {
-        // Approval creation failed, but continue
+      } catch (e, stackTrace) {
+        ErrorHandler.handleError(e, stackTrace, context: 'creating cash payment approval');
       }
 
       // Send notification to user
@@ -288,13 +277,14 @@ class PaymentService {
           description: description,
           userId: user.uid,
         );
-      } catch (e) {
-        // Ignore notification errors
+      } catch (e, stackTrace) {
+        ErrorHandler.handleError(e, stackTrace, context: 'sending cash payment notification');
       }
 
       return {'success': true, 'status': paymentPendingCash, 'payment_id': paymentId};
-    } catch (e) {
-      return {'success': false, 'error': e.toString()};
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'requesting cash payment');
+      return {'success': false, 'error': ErrorHandler.getUserFriendlyMessage(e)};
     }
   }
 
@@ -375,8 +365,8 @@ class PaymentService {
           itemName: itemName,
           userId: user?.uid,
         );
-      } catch (e) {
-        // Ignore notification errors
+      } catch (e, stackTrace) {
+        ErrorHandler.handleError(e, stackTrace, context: 'sending payment success notification');
       }
 
       // Send enrollment notification for class/workshop enrollments
@@ -392,8 +382,8 @@ class PaymentService {
               userId: user!.uid,
             );
           }
-        } catch (e) {
-          // Ignore notification errors
+        } catch (e, stackTrace) {
+          ErrorHandler.handleError(e, stackTrace, context: 'sending enrollment notification');
         }
       }
 
@@ -449,16 +439,12 @@ class PaymentService {
               builder: (_) => ReceiptScreen(payment: payment),
             ),
           );
-        } catch (e) {
-          if (kDebugMode) {
-            print('Error navigating to receipt screen: $e');
-          }
+        } catch (e, stackTrace) {
+          ErrorHandler.handleError(e, stackTrace, context: 'navigating to receipt screen');
         }
       }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error in payment success handler: $e');
-      }
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'handling payment success');
     } finally {
       _pendingPaymentContext = null;
     }
@@ -492,7 +478,8 @@ class PaymentService {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'handling payment error');
     } finally {
       _pendingPaymentContext = null;
     }
@@ -515,7 +502,8 @@ class PaymentService {
             ? 'TXN_${DateTime.now().millisecondsSinceEpoch}'
             : null,
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'updating payment status');
     }
   }
 
@@ -537,7 +525,8 @@ class PaymentService {
           ...data,
         };
       }).toList();
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'fetching payment history');
       return [];
     }
   }
@@ -554,7 +543,8 @@ class PaymentService {
         'lastPaymentUpdate': FieldValue.serverTimestamp(),
         'userId': userId,
       }, SetOptions(merge: true));
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'triggering home stats update');
     }
   }
 
@@ -575,7 +565,8 @@ class PaymentService {
           ...data,
         };
       }).toList();
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'fetching pending payments');
       return [];
     }
   }
@@ -591,7 +582,8 @@ class PaymentService {
         'updated_at': FieldValue.serverTimestamp(),
       });
       return true;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'cancelling payment');
       return false;
     }
   }

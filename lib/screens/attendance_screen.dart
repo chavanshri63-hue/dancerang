@@ -6,6 +6,7 @@ import '../widgets/glassmorphism_app_bar.dart';
 import '../services/payment_service.dart';
 import 'qr_display_screen.dart';
 import 'qr_scanner_screen.dart';
+import '../utils/error_handler.dart';
 
 class AttendanceScreen extends StatefulWidget {
   final String role; // 'student' | 'faculty' | 'admin'
@@ -142,7 +143,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with TickerProvider
         'lateCount': lateCount,
         'recentAttendance': recentAttendance,
       };
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading attendance data');
       return {
         'totalAttendance': 0,
         'attendedSessions': 0,
@@ -203,7 +205,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with TickerProvider
         'workshopsThisMonth': workshopsThisMonth.toString(),
         'overallRate': overallRate,
       };
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading admin attendance data');
       return {
         'totalStudents': '0',
         'classesThisMonth': '0',
@@ -283,7 +286,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with TickerProvider
       });
 
       return studentsWithAttendance;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading student list');
       return [];
     }
   }
@@ -1829,7 +1833,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with TickerProvider
         'topPerformers': topPerformers.take(5).toList(),
         'needsAttention': needsAttention.take(5).toList(),
       };
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading faculty attendance summary');
       return {};
     }
   }
@@ -1926,7 +1931,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> with TickerProvider
         'classStats': classStats.take(5).toList(),
         'facultyStats': facultyStats.take(5).toList(),
       };
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading admin attendance summary');
       return {};
     }
   }

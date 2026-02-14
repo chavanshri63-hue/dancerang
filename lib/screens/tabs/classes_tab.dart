@@ -72,7 +72,8 @@ class _ClassesTabState extends State<ClassesTab> {
       _danceStyles = await ClassStylesService.getAllStyles();
       _categories = _danceStyles.map((style) => style.name).toList();
       if (mounted) setState(() {});
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading dance categories');
       _categories = ['Hip Hop', 'Bollywood', 'Contemporary', 'Jazz', 'Ballet', 'Salsa'];
       if (mounted) setState(() {});
     }
@@ -97,7 +98,8 @@ class _ClassesTabState extends State<ClassesTab> {
       }
       _branches.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
       if (mounted) setState(() {});
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading branches');
       _branches = [];
       if (mounted) setState(() {});
     }
@@ -115,8 +117,8 @@ class _ClassesTabState extends State<ClassesTab> {
         if (mounted) setState(() {
           _isAdmin = role?.toLowerCase() == 'admin';
         });
-      } catch (e) {
-        // Error checking admin role
+      } catch (e, stackTrace) {
+        ErrorHandler.handleError(e, stackTrace, context: 'checking admin role');
       }
     }
   }
@@ -306,10 +308,11 @@ class _ClassesTabState extends State<ClassesTab> {
           );
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'booking class');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error starting payment: $e'),
+          content: Text(ErrorHandler.getUserFriendlyMessage(e)),
           backgroundColor: Colors.red,
         ),
       );
@@ -324,7 +327,8 @@ class _ClassesTabState extends State<ClassesTab> {
       final reminderTime = classDateTime.subtract(const Duration(hours: 1));
       
       // Notification scheduling disabled
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'scheduling class reminder');
     }
   }
 
@@ -928,10 +932,11 @@ class _ClassesTabState extends State<ClassesTab> {
                       duration: Duration(seconds: 3),
                     ),
                   );
-                } catch (e) {
+                } catch (e, stackTrace) {
+                  ErrorHandler.handleError(e, stackTrace, context: 'sending test notification');
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Error: ${e.toString()}'),
+                      content: Text(ErrorHandler.getUserFriendlyMessage(e)),
                       backgroundColor: const Color(0xFFE53935),
                     ),
                   );
@@ -1649,9 +1654,10 @@ class _ClassDetailsModalState extends State<_ClassDetailsModal> {
           );
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'starting payment');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error starting payment: $e'), backgroundColor: const Color(0xFFE53935)),
+        SnackBar(content: Text(ErrorHandler.getUserFriendlyMessage(e)), backgroundColor: const Color(0xFFE53935)),
       );
     }
   }
@@ -1975,9 +1981,10 @@ class _ClassPackagesModal extends StatelessWidget {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'joining class');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to join: $e'), backgroundColor: const Color(0xFFE53935)),
+        SnackBar(content: Text(ErrorHandler.getUserFriendlyMessage(e)), backgroundColor: const Color(0xFFE53935)),
       );
     }
   }

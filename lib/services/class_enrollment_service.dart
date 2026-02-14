@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models/class_enrollment_model.dart';
 import 'payment_service.dart';
+import '../utils/error_handler.dart';
 
 /// Service for managing class enrollments with session tracking
 class ClassEnrollmentService {
@@ -206,10 +207,11 @@ class ClassEnrollmentService {
         // Transaction failed (duplicate or capacity exceeded)
         return transactionResult;
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'enrolling in class');
       return {
         'success': false,
-        'message': 'Error enrolling in class: $e',
+        'message': ErrorHandler.getUserFriendlyMessage(e),
       };
     }
   }
@@ -227,7 +229,8 @@ class ClassEnrollmentService {
       return snapshot.docs
           .map((doc) => ClassEnrollment.fromMap(doc.data()))
           .toList();
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'fetching user enrollments');
       return [];
     }
   }
@@ -244,7 +247,8 @@ class ClassEnrollmentService {
         return ClassEnrollment.fromMap(doc.data()!);
       }
       return null;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'fetching enrollment by ID');
       return null;
     }
   }
@@ -393,10 +397,11 @@ class ClassEnrollmentService {
         'completedSessions': newCompletedSessions,
         'remainingSessions': newRemainingSessions,
       };
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'marking attendance');
       return {
         'success': false,
-        'message': 'Error marking attendance: $e',
+        'message': ErrorHandler.getUserFriendlyMessage(e),
       };
     }
   }
@@ -458,7 +463,8 @@ class ClassEnrollmentService {
         'expiredEnrollments': expiredEnrollments,
         'totalRevenue': totalRevenue,
       };
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'fetching enrollment stats');
       return {
         'totalEnrollments': 0,
         'activeEnrollments': 0,
@@ -493,7 +499,8 @@ class ClassEnrollmentService {
       }
 
       await batch.commit();
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'updating expired enrollments');
     }
   }
 
@@ -514,7 +521,8 @@ class ClassEnrollmentService {
       return snapshot.docs
           .map((doc) => ClassPackage.fromMap(doc.data()))
           .toList();
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'fetching available packages');
       return _getDefaultPackages();
     }
   }

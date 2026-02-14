@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -19,11 +20,19 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   List<Map<String, dynamic>> _attendanceHistory = [];
   final GlobalKey qrKey = GlobalKey(debugLabel: 'QR');
   QRViewController? controller;
+  StreamSubscription? _scanSubscription;
 
   @override
   void initState() {
     super.initState();
     _loadAttendanceHistory();
+  }
+
+  @override
+  void dispose() {
+    _scanSubscription?.cancel();
+    controller?.dispose();
+    super.dispose();
   }
 
   Future<void> _markWorkshopWithKnownIds(String userId, String? workshopId) async {
@@ -106,7 +115,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
 
   void _onQRViewCreated(QRViewController controller) {
     this.controller = controller;
-    controller.scannedDataStream.listen((scanData) {
+    _scanSubscription = controller.scannedDataStream.listen((scanData) {
       if (scanData.code != null) {
         if (_handlingScan) return;
         _handlingScan = true;

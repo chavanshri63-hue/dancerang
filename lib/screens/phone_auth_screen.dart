@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'otp_verification_screen.dart';
+import '../utils/error_handler.dart';
 
 class PhoneAuthScreen extends StatefulWidget {
   const PhoneAuthScreen({super.key});
@@ -261,11 +262,12 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
             throw Exception('APNs token not available. Please ensure push notifications are properly configured.');
           }
         }
-      } catch (e) {
+      } catch (e, stackTrace) {
+        ErrorHandler.handleError(e, stackTrace, context: 'checking APNs token');
         setState(() {
           _isLoading = false;
         });
-        _showSnackBar('Push notifications not configured. Please use demo login or contact support.');
+        _showSnackBar(ErrorHandler.getUserFriendlyMessage(e));
         return;
       }
       
@@ -274,18 +276,17 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
       
       // Use Firebase Phone Auth only
       await _sendOTPViaFirebase(phoneNumber);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'sending OTP');
       setState(() {
         _isLoading = false;
       });
       
-      // Check if it's a Firebase error
       if (e.toString().contains('APNS') || e.toString().contains('APNs')) {
         _showSnackBar('Phone verification temporarily unavailable. Please try again later.');
-        // Show fallback option
         _showFallbackOption();
       } else {
-        _showSnackBar('Error: ${e.toString()}');
+        _showSnackBar(ErrorHandler.getUserFriendlyMessage(e));
       }
     }
   }
@@ -296,8 +297,9 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/home');
       }
-    } catch (e) {
-      _showSnackBar('Sign in failed. Please try again.');
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'signing in with credential');
+      _showSnackBar(ErrorHandler.getUserFriendlyMessage(e));
     }
   }
 
@@ -397,11 +399,12 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
         },
         timeout: const Duration(seconds: 60),
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'sending OTP via Firebase');
       setState(() {
         _isLoading = false;
       });
-      _showSnackBar('Failed to send OTP. Please try again.');
+      _showSnackBar(ErrorHandler.getUserFriendlyMessage(e));
     }
   }
 

@@ -11,6 +11,7 @@ import 'admin_dashboard_screen.dart';
 import 'login_screen.dart';
 import 'user_progress_screen.dart';
 import '../config/demo_session.dart';
+import '../utils/error_handler.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String role; // 'student' | 'faculty' | 'admin'
@@ -105,8 +106,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _isLoading = false;
         });
       }
-    } catch (e) {
-      // Create profile from Firebase Auth data on error
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading profile');
       setState(() {
         _profile = _createProfileFromAuth(FirebaseAuth.instance.currentUser);
         _isLoading = false;

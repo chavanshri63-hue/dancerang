@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'otp_verification_screen.dart';
 import 'home_screen.dart';
 import '../config/app_config.dart';
+import '../utils/error_handler.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -75,7 +76,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           });
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading role keys');
       final envAdmin = AppConfig.adminKey;
       final envFaculty = AppConfig.facultyKey;
       if (mounted) {
@@ -108,8 +110,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                  _backgroundImageUrl = AppConfig.defaultLoginBackground;
                });
              }
-    } catch (e) {
-      // Set default dance background image on error
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading background image');
       if (!mounted) return;
       setState(() {
         _backgroundImageUrl = AppConfig.defaultLoginBackground;
@@ -239,11 +241,14 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           // Auto-retrieval timeout
         },
       );
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'An error occurred. Please try again.';
-      });
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'sending OTP');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = ErrorHandler.getUserFriendlyMessage(e);
+        });
+      }
     }
   }
 

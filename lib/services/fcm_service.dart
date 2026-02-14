@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -24,11 +25,12 @@ class FCMService {
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static String? _currentToken;
+  static StreamSubscription? _tokenRefreshSub;
+  static StreamSubscription? _foregroundMessageSub;
+  static StreamSubscription? _messageOpenedSub;
 
-  /// Initialize FCM service
   static Future<void> initialize() async {
     try {
-      // Request permissions
       NotificationSettings settings = await _messaging.requestPermission(
         alert: true,
         badge: true,
@@ -36,24 +38,21 @@ class FCMService {
         provisional: false,
       );
 
-      // Get FCM token even if provisional (for iOS)
       if (settings.authorizationStatus == AuthorizationStatus.authorized ||
           settings.authorizationStatus == AuthorizationStatus.provisional) {
-        // Get FCM token
         await _getToken();
         
-        // Setup token refresh listener
-        _messaging.onTokenRefresh.listen((newToken) {
+        _tokenRefreshSub?.cancel();
+        _tokenRefreshSub = _messaging.onTokenRefresh.listen((newToken) {
           _saveToken(newToken);
         });
 
-        // Setup foreground message handler
-        FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+        _foregroundMessageSub?.cancel();
+        _foregroundMessageSub = FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
 
-        // Setup message opened app handler
-        FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
+        _messageOpenedSub?.cancel();
+        _messageOpenedSub = FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
 
-        // Check if app was opened from notification
         RemoteMessage? initialMessage = await _messaging.getInitialMessage();
         if (initialMessage != null) {
           _handleMessageOpenedApp(initialMessage);
@@ -62,6 +61,15 @@ class FCMService {
     } catch (e) {
       // Ignore initialization errors
     }
+  }
+
+  static void dispose() {
+    _tokenRefreshSub?.cancel();
+    _foregroundMessageSub?.cancel();
+    _messageOpenedSub?.cancel();
+    _tokenRefreshSub = null;
+    _foregroundMessageSub = null;
+    _messageOpenedSub = null;
   }
 
   /// Get FCM token

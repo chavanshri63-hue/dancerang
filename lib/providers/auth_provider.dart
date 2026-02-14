@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../config/app_config.dart';
+import '../utils/error_handler.dart';
 
 class AppAuthProvider extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -55,10 +56,8 @@ class AppAuthProvider extends ChangeNotifier {
         _role = data['role']?.toString();
         _userName = data['name']?.toString();
       }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error loading user role: $e');
-      }
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading user role');
     }
     notifyListeners();
   }
@@ -80,14 +79,12 @@ class AppAuthProvider extends ChangeNotifier {
         _adminKey = envAdmin.isNotEmpty ? envAdmin : null;
         _facultyKey = envFaculty.isNotEmpty ? envFaculty : null;
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading role keys');
       final envAdmin = AppConfig.adminKey;
       final envFaculty = AppConfig.facultyKey;
       _adminKey = envAdmin.isNotEmpty ? envAdmin : null;
       _facultyKey = envFaculty.isNotEmpty ? envFaculty : null;
-      if (kDebugMode) {
-        print('Error loading role keys: $e');
-      }
     }
     _keysLoaded = true;
     notifyListeners();

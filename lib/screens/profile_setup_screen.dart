@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 // Removed custom neon app bar to use theme-driven AppBar
 import 'home_screen.dart';
+import '../utils/error_handler.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   final String phoneNumber;
@@ -87,7 +88,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           });
         }
         return; // success
-      } catch (e) {
+      } catch (e, stackTrace) {
+        ErrorHandler.handleError(e, stackTrace, context: 'loading user data');
         attempt += 1;
         await Future.delayed(Duration(milliseconds: 300 * attempt));
         if (attempt >= 3) {
@@ -111,10 +113,13 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           _profileImage = File(image.path);
         });
       }
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Failed to pick image: $e';
-      });
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'picking image');
+      if (mounted) {
+        setState(() {
+          _errorMessage = ErrorHandler.getUserFriendlyMessage(e);
+        });
+      }
     }
   }
 
@@ -135,7 +140,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         await ref.putFile(_profileImage!);
         final downloadUrl = await ref.getDownloadURL();
         return downloadUrl;
-      } catch (e) {
+      } catch (e, stackTrace) {
+        ErrorHandler.handleError(e, stackTrace, context: 'uploading profile image');
         attempt += 1;
         
         if (e.toString().contains('unauthorized')) {
@@ -155,7 +161,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         await Future.delayed(Duration(milliseconds: 400 * attempt));
         if (attempt >= 3) {
           setState(() {
-            _errorMessage = 'Failed to upload image after 3 attempts. Please try again.';
+            _errorMessage = ErrorHandler.getUserFriendlyMessage(e);
           });
           return null;
         }
@@ -267,11 +273,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           (route) => false,
         );
       }
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'Registration failed: $e';
-      });
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'completing registration');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = ErrorHandler.getUserFriendlyMessage(e);
+        });
+      }
     }
   }
 

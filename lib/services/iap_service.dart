@@ -289,4 +289,10 @@ class IapService {
     _purchaseCompleter = null;
     _lastDeliverError = null;
   }
+
+  void dispose() {
+    _purchaseSub?.cancel();
+    _purchaseSub = null;
+    _clearPending();
+  }
 }

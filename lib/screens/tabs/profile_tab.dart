@@ -243,9 +243,10 @@ class _EnrolButtonState extends State<_EnrolButton> {
           'unenrolledAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         });
-      } catch (e) {
+      } catch (e, stackTrace) {
+        ErrorHandler.handleError(e, stackTrace, context: 'updating enrollment');
         Navigator.of(context).pop(); // Close loading
-        _showErrorSnackBar('Error updating enrollment: $e');
+        _showErrorSnackBar(ErrorHandler.getUserFriendlyMessage(e));
         return;
       }
 
@@ -261,8 +262,8 @@ class _EnrolButtonState extends State<_EnrolButton> {
           'unenrolledAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         });
-      } catch (e) {
-        // User subcollection might not exist, that's okay
+      } catch (e, stackTrace) {
+        ErrorHandler.handleError(e, stackTrace, context: 'updating user enrollment subcollection');
       }
 
       // Also update legacy class_enrollments so admin/faculty list updates
@@ -320,8 +321,8 @@ class _EnrolButtonState extends State<_EnrolButton> {
             'updatedAt': FieldValue.serverTimestamp(),
           });
         }
-      } catch (e) {
-        // Ignore legacy enrollment update errors
+      } catch (e, stackTrace) {
+        ErrorHandler.handleError(e, stackTrace, context: 'updating legacy enrollment');
       }
 
       // Decrement class enrollment count
@@ -352,10 +353,10 @@ class _EnrolButtonState extends State<_EnrolButton> {
         ),
       );
 
-    } catch (e) {
-      // Close loading
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'exiting class');
       Navigator.of(context).pop();
-      _showErrorSnackBar('Error exiting class: $e');
+      _showErrorSnackBar(ErrorHandler.getUserFriendlyMessage(e));
     }
   }
 
@@ -369,7 +370,8 @@ class _EnrolButtonState extends State<_EnrolButton> {
         'lastPaymentUpdate': FieldValue.serverTimestamp(),
         'userId': userId,
       }, SetOptions(merge: true));
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'triggering home stats update');
     }
   }
 
@@ -400,11 +402,13 @@ class _EnrolButtonState extends State<_EnrolButton> {
                 'updatedAt': FieldValue.serverTimestamp(),
               });
             }
-          } catch (e) {
+          } catch (e, stackTrace) {
+            ErrorHandler.handleError(e, stackTrace, context: 'validating enrollment class');
           }
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'cleaning up invalid enrollments');
     }
   }
 
@@ -497,11 +501,13 @@ class _PaymentStatusCardState extends State<_PaymentStatusCard> {
                 'updatedAt': FieldValue.serverTimestamp(),
               });
             }
-          } catch (e) {
+          } catch (e, stackTrace) {
+            ErrorHandler.handleError(e, stackTrace, context: 'validating user enrollment class');
           }
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'cleaning up user invalid enrollments');
     }
   }
 
@@ -1236,7 +1242,8 @@ class _AdminStatsCardState extends State<_AdminStatsCard> {
           .where('isAvailable', isEqualTo: true)
           .get();
       return snapshot.docs.length;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'fetching available classes count');
       return 0;
     }
   }
@@ -1270,14 +1277,16 @@ class _AdminStatsCardState extends State<_AdminStatsCard> {
         .where('type', isEqualTo: 'cash_payment')
         .get();
     cashCount = cashSnapshot.docs.length;
-  } catch (e) {
+  } catch (e, stackTrace) {
+    ErrorHandler.handleError(e, stackTrace, context: 'fetching pending cash payments');
   }
       
       return attendanceSnapshot.docs.length + 
              workshopSnapshot.docs.length + 
              bannerSnapshot.docs.length +
              cashCount;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'fetching pending tasks count');
       return 0;
     }
   }
@@ -1859,11 +1868,12 @@ class _StyleManagementModalState extends State<_StyleManagementModal> {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'adding dance style');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error adding style: $e'),
+            content: Text(ErrorHandler.getUserFriendlyMessage(e)),
             backgroundColor: Colors.red,
           ),
         );
@@ -1907,6 +1917,7 @@ class _StyleManagementModalState extends State<_StyleManagementModal> {
       await ClassStylesService.updateStyle(styleToUpdate.id, updatedStyle);
       
       _editStyleController.clear();
+      if (!mounted) return;
       setState(() {
         _editingStyle = null;
       });
@@ -1919,11 +1930,12 @@ class _StyleManagementModalState extends State<_StyleManagementModal> {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'updating dance style');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error updating style: $e'),
+            content: Text(ErrorHandler.getUserFriendlyMessage(e)),
             backgroundColor: Colors.red,
           ),
         );
@@ -1983,11 +1995,12 @@ class _StyleManagementModalState extends State<_StyleManagementModal> {
             ),
           );
         }
-      } catch (e) {
+      } catch (e, stackTrace) {
+        ErrorHandler.handleError(e, stackTrace, context: 'deleting dance style');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Error deleting style: $e'),
+              content: Text(ErrorHandler.getUserFriendlyMessage(e)),
               backgroundColor: Colors.red,
             ),
           );
@@ -2334,8 +2347,9 @@ class _SubscriptionPlansBottomSheetState extends State<_SubscriptionPlansBottomS
       } else {
         _showError(result['message'] ?? 'Payment failed');
       }
-    } catch (e) {
-      _showError('Error: ${e.toString()}');
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'processing payment');
+      _showError(ErrorHandler.getUserFriendlyMessage(e));
     } finally {
       setState(() {
         _isLoading = false;
@@ -2676,8 +2690,9 @@ class _SubscriptionPlansDialogState extends State<_SubscriptionPlansDialog> {
       } else {
         _showError(result['message'] ?? 'Subscription failed. Please try again.');
       }
-    } catch (e) {
-      _showError('Payment failed: ${e.toString()}');
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'processing subscription');
+      _showError(ErrorHandler.getUserFriendlyMessage(e));
     } finally {
       if (mounted) {
         setState(() {

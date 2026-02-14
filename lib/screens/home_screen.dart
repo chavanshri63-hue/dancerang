@@ -13,6 +13,7 @@ import '../widgets/payment_option_dialog.dart';
 import 'add_edit_class_screen.dart';
 import '../services/admin_service.dart';
 import '../services/dance_styles_service.dart';
+import '../utils/error_handler.dart';
 import '../services/branches_service.dart';
 import '../models/banner_model.dart';
 import '../services/event_controller.dart';

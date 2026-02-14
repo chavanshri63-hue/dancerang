@@ -21,6 +21,7 @@ import 'services/dance_styles_service.dart';
 import 'services/class_enrollment_expiry_service.dart';
 import 'services/birthday_service.dart';
 import 'services/fcm_service.dart';
+import 'services/iap_service.dart';
 import 'config/app_config.dart';
 import 'providers/auth_provider.dart';
 
@@ -212,14 +213,12 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // Cleanup method for services (called when app is disposed)
   static void cleanup() {
     try {
-      // Stop live notification monitoring
       LiveNotificationService.stopSpotMonitoring();
-      
-      // Stop background renewal service
       BackgroundRenewalService.stop();
+      FCMService.dispose();
+      IapService.instance.dispose();
     } catch (e) {
       // Service cleanup error
     }

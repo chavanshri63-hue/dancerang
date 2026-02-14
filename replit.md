@@ -54,6 +54,11 @@ flutter build web --release --base-href "/" && python3 serve.py
 - SDK constraint set to `^3.8.0` for compatibility with available Flutter SDK
 
 ## Recent Changes
+- 2026-02-14: Performance & stability optimizations (mobile-focused, no UI/behavior changes)
+  - Fixed memory leaks: Added stream subscription tracking and cancellation in qr_scanner_screen, admin_online_management_screen, fcm_service (3 subscriptions), iap_service
+  - Added `mounted` guards before 572+ setState calls that follow async operations across 24+ screen files to prevent setState-after-dispose crashes
+  - Wired ErrorHandler utility into 70+ catch blocks across 11 critical files (login, payments, enrollment, attendance, profile) for Crashlytics reporting and user-friendly error messages
+  - Integrated FCMService.dispose() and IapService.dispose() into app lifecycle cleanup in main.dart
 - 2026-02-13: Security & architecture refactoring
   - Removed hardcoded admin/faculty keys from app_config.dart
   - Added Provider package with AppAuthProvider for centralized auth state
