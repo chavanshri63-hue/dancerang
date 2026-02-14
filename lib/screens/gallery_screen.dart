@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:video_player/video_player.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../widgets/glassmorphism_app_bar.dart';
 
 class GalleryScreen extends StatefulWidget {
@@ -1230,6 +1231,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
 
   Future<void> _uploadMedia() async {
+    if (_isLoading) return;
+
     if (_selectedFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1281,7 +1284,12 @@ class _GalleryScreenState extends State<GalleryScreen> {
         },
       );
 
-      // Upload file to Firebase Storage
+      bool wakelockEnabled = false;
+      if (_selectedMediaType == 'Video') {
+        WakelockPlus.enable();
+        wakelockEnabled = true;
+      }
+
       final String fileName = '${DateTime.now().millisecondsSinceEpoch}_${_selectedFile!.name}';
       final Reference ref = FirebaseStorage.instance
           .ref()
@@ -1347,10 +1355,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
       _refreshGallery();
 
     } catch (e) {
-      // Cancel the progress subscription
       await _uploadSubscription?.cancel();
       
-      // Close loading dialog
       Navigator.pop(context);
       
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1361,6 +1367,9 @@ class _GalleryScreenState extends State<GalleryScreen> {
         ),
       );
     } finally {
+      if (_selectedMediaType == 'Video') {
+        WakelockPlus.disable();
+      }
       setState(() {
         _isLoading = false;
       });

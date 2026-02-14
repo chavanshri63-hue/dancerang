@@ -61,6 +61,11 @@ flutter build web --release --base-href "/" && python3 serve.py
   - Fixed new class notifications: replaced local per-student loop with single `notifications` collection write, triggering existing `sendAdminNotification` Cloud Function for FCM broadcast
   - Fixed new workshop notifications: same approach as class notifications
   - Removed unused `LiveNotificationService` imports from admin_classes_management_screen and workshop_service
+- 2026-02-14: Upload reliability fixes (mobile-only, no UI/behavior changes)
+  - Added `wakelock_plus` package to keep screen awake during video uploads, preventing iOS/Android background kill
+  - Gallery upload: wakelock enabled only for video uploads, disabled in finally block (photos unaffected)
+  - Online video upload: wakelock enabled when video file is being uploaded, disabled in finally block
+  - Gallery upload: added `_isLoading` early-return guard at top of `_uploadMedia()` to prevent double-tap duplicate uploads
 - 2026-02-14: Performance & stability optimizations (mobile-focused, no UI/behavior changes)
   - Fixed memory leaks: Added stream subscription tracking and cancellation in qr_scanner_screen, admin_online_management_screen, fcm_service (3 subscriptions), iap_service
   - Added `mounted` guards before 572+ setState calls that follow async operations across 24+ screen files to prevent setState-after-dispose crashes

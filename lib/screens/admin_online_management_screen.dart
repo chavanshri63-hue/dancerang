@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../widgets/glassmorphism_app_bar.dart';
 import '../services/dance_styles_service.dart';
 import 'admin_analytics_dashboard_screen.dart';
@@ -2202,6 +2203,7 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
       final ts = DateTime.now().millisecondsSinceEpoch;
 
       if (_videoFile != null) {
+        WakelockPlus.enable();
         setState(() => _uploadProgress = 0.1);
         final ref = storage.ref().child('online_videos/$ts.mp4');
         
@@ -2286,6 +2288,9 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
         );
       }
     } finally {
+      if (_videoFile != null) {
+        WakelockPlus.disable();
+      }
       if (mounted) setState(() { 
         _loading = false;
         _isUploading = false;

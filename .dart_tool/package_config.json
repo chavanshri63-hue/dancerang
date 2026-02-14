@@ -530,6 +530,18 @@
       "languageVersion": "2.12"
     },
     {
+      "name": "package_info_plus",
+      "rootUri": "file:///home/runner/.pub-cache/hosted/pub.dev/package_info_plus-9.0.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.3"
+    },
+    {
+      "name": "package_info_plus_platform_interface",
+      "rootUri": "file:///home/runner/.pub-cache/hosted/pub.dev/package_info_plus_platform_interface-3.2.1",
+      "packageUri": "lib/",
+      "languageVersion": "2.18"
+    },
+    {
       "name": "path",
       "rootUri": "file:///home/runner/.pub-cache/hosted/pub.dev/path-1.9.1",
       "packageUri": "lib/",
@@ -834,6 +846,18 @@
       "rootUri": "file:///home/runner/.pub-cache/hosted/pub.dev/vm_service-15.0.0",
       "packageUri": "lib/",
       "languageVersion": "3.3"
+    },
+    {
+      "name": "wakelock_plus",
+      "rootUri": "file:///home/runner/.pub-cache/hosted/pub.dev/wakelock_plus-1.4.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.4"
+    },
+    {
+      "name": "wakelock_plus_platform_interface",
+      "rootUri": "file:///home/runner/.pub-cache/hosted/pub.dev/wakelock_plus_platform_interface-1.3.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.4"
     },
     {
       "name": "web",
