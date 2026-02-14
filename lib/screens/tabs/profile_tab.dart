@@ -34,12 +34,67 @@ class _EnrolButton extends StatefulWidget {
   final String danceClassName;
   final bool isFull;
   final VoidCallback onBook;
-  const _EnrolButton({required this.danceClassId, required this.danceClassName, required this.isFull, required this.onBook});
+  final String? enrollmentStatus;
+  const _EnrolButton({required this.danceClassId, required this.danceClassName, required this.isFull, required this.onBook, this.enrollmentStatus});
 
   @override
   State<_EnrolButton> createState() => _EnrolButtonState();
 }
 class _EnrolButtonState extends State<_EnrolButton> {
+
+  Widget _buildEnrollmentUI(bool enrolled, bool isCompleted) {
+    if (enrolled) {
+      return Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: ElevatedButton.icon(
+                  onPressed: null,
+                  icon: Icon(isCompleted ? Icons.check_circle_outline : Icons.check_circle, size: 14),
+                  label: Text(isCompleted ? 'Completed' : 'Enrolled', style: const TextStyle(fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isCompleted ? Colors.orange : Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                ),
+              ),
+              if (!isCompleted) ...[
+              const SizedBox(width: 6),
+              Expanded(
+                flex: 2,
+                child: OutlinedButton.icon(
+                  onPressed: () => _showExitClassDialog(widget.danceClassId, widget.danceClassName),
+                  icon: const Icon(Icons.exit_to_app, size: 14),
+                  label: const Text('Exit Class', style: TextStyle(fontSize: 12)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFDC2626),
+                    side: const BorderSide(color: Color(0xFFDC2626)),
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                ),
+              ),
+              ],
+            ],
+          ),
+        ],
+      );
+    }
+    return ElevatedButton.icon(
+      onPressed: widget.isFull ? null : widget.onBook,
+      icon: const Icon(Icons.book_online, size: 16),
+      label: Text(widget.isFull ? 'Full' : 'Join Now'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFFE53935),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +113,12 @@ class _EnrolButtonState extends State<_EnrolButton> {
       );
     }
     
-    // Check enrollment in user subcollection (primary) and global collection (fallback)
+    if (widget.enrollmentStatus != null) {
+      final enrolled = widget.enrollmentStatus == 'enrolled' || widget.enrollmentStatus == 'completed';
+      final isCompleted = widget.enrollmentStatus == 'completed';
+      return _buildEnrollmentUI(enrolled, isCompleted);
+    }
+
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
           .collection('users')
@@ -87,65 +147,7 @@ class _EnrolButtonState extends State<_EnrolButton> {
                 (globalEnrollmentSnap.hasData && 
                  globalEnrollmentSnap.data!.docs.any((doc) => doc.data()['status'] == 'completed'));
         
-        // Debug: Log enrollment status
-            if (userEnrollmentSnap.hasData) {
-              final userData = userEnrollmentSnap.data!.data();
-            }
-            if (globalEnrollmentSnap.hasData) {
-              for (var doc in globalEnrollmentSnap.data!.docs) {
-          }
-        }
-        if (enrolled) {
-          return Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton.icon(
-                      onPressed: null,
-                      icon: Icon(isCompleted ? Icons.check_circle_outline : Icons.check_circle, size: 14),
-                      label: Text(isCompleted ? 'Completed' : 'Enrolled', style: const TextStyle(fontSize: 12)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isCompleted ? Colors.orange : Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                      ),
-                    ),
-                  ),
-                  if (!isCompleted) ...[
-                  const SizedBox(width: 6),
-                  Expanded(
-                    flex: 2,
-                    child: OutlinedButton.icon(
-                      onPressed: () => _showExitClassDialog(widget.danceClassId, widget.danceClassName),
-                      icon: const Icon(Icons.exit_to_app, size: 14),
-                      label: const Text('Exit Class', style: TextStyle(fontSize: 12)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFFDC2626),
-                        side: const BorderSide(color: Color(0xFFDC2626)),
-                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                      ),
-                    ),
-                  ),
-                  ],
-                ],
-              ),
-            ],
-          );
-        }
-        return ElevatedButton.icon(
-          onPressed: widget.isFull ? null : widget.onBook,
-          icon: const Icon(Icons.book_online, size: 16),
-          label: Text(widget.isFull ? 'Full' : 'Join Now'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFE53935),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        );
+            return _buildEnrollmentUI(enrolled, isCompleted);
           },
         );
       },

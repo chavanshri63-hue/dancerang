@@ -54,6 +54,14 @@ flutter build web --release --base-href "/" && python3 serve.py
 - SDK constraint set to `^3.8.0` for compatibility with available Flutter SDK
 
 ## Recent Changes
+- 2026-02-14: Classes tab performance optimization (mobile-only, no UI/behavior changes)
+  - Replaced per-card enrollment StreamBuilders (4 listeners per card) with 2 list-level enrollment streams
+  - User subcollection stream (`users/{uid}/enrollments`) + global enrollments stream merged into single status map
+  - `_EnrolButton` accepts optional `enrollmentStatus` to skip internal streams when provided (backward-compatible)
+  - `_ClassDetailsModal` accepts optional `enrollmentStatus` to skip its own nested StreamBuilders
+  - Removed `ValueKey(_refreshKey)` pattern that destroyed/recreated the classes StreamBuilder on every event
+  - Event and payment listeners now trigger simple rebuilds without stream recreation
+  - Result: Firestore listeners reduced from 4N+1 (N = visible cards) to 3 total
 - 2026-02-14: Notification audit & fixes (mobile-focused, no UI/behavior changes)
   - Added "2 classes remaining" warning: writes to student's Firestore notification subcollection when attendance marking reduces remainingSessions to 2
   - Created Cloud Function `onApprovalCreated` (Firestore trigger on `approvals/{id}`) to notify all admin/faculty of new cash payment and join requests via FCM + in-app

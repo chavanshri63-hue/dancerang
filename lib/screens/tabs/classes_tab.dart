@@ -19,7 +19,12 @@ class _ClassesTabState extends State<ClassesTab> {
   final EventController _eventController = EventController();
   StreamSubscription<ClassEvent>? _eventSubscription;
   StreamSubscription<Map<String, dynamic>>? _paymentRefreshSubscription;
-  int _refreshKey = 0;
+
+  Map<String, String> _enrollmentStatusMap = {};
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _userEnrollmentsSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _globalEnrollmentsSub;
+  Map<String, String> _userEnrollStatuses = {};
+  Map<String, String> _globalEnrollStatuses = {};
 
   String _normalizeKey(String value) {
     return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
@@ -31,25 +36,68 @@ class _ClassesTabState extends State<ClassesTab> {
     _loadCategories();
     _loadBranches();
     _checkAdminRole();
-    // Listen to class events and refresh classes list
+    _setupEnrollmentStreams();
     _eventSubscription = _eventController.eventStream.listen((event) {
       if (mounted) {
-        setState(() {
-          _refreshKey++;
-        });
+        setState(() {});
       }
     });
     
-    // Listen to payment success events for real-time enrollment updates
     _paymentRefreshSubscription = PaymentService.refreshStream.listen((event) {
       if (mounted && (event['type'] == 'payment_success' || event['type'] == 'enrollment_updated')) {
         if (event['paymentType'] == 'class_fee' || event['paymentType'] == 'class') {
-          // Force refresh enrollment status when payment succeeds
-          setState(() {
-            _refreshKey++;
-          });
+          if (mounted) setState(() {});
         }
       }
+    });
+  }
+
+  void _mergeEnrollmentStatuses() {
+    final merged = <String, String>{};
+    merged.addAll(_globalEnrollStatuses);
+    merged.addAll(_userEnrollStatuses);
+    if (mounted) {
+      setState(() {
+        _enrollmentStatusMap = merged;
+      });
+    }
+  }
+
+  void _setupEnrollmentStreams() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    _userEnrollmentsSub = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('enrollments')
+        .snapshots()
+        .listen((snapshot) {
+      _userEnrollStatuses = {};
+      for (final doc in snapshot.docs) {
+        final status = doc.data()['status']?.toString();
+        if (status != null) {
+          _userEnrollStatuses[doc.id] = status;
+        }
+      }
+      _mergeEnrollmentStatuses();
+    });
+
+    _globalEnrollmentsSub = FirebaseFirestore.instance
+        .collection('enrollments')
+        .where('userId', isEqualTo: uid)
+        .where('status', whereIn: ['enrolled', 'completed'])
+        .snapshots()
+        .listen((snapshot) {
+      _globalEnrollStatuses = {};
+      for (final doc in snapshot.docs) {
+        final itemId = doc.data()['itemId']?.toString();
+        final status = doc.data()['status']?.toString();
+        if (itemId != null && status != null) {
+          _globalEnrollStatuses[itemId] = status;
+        }
+      }
+      _mergeEnrollmentStatuses();
     });
   }
 
@@ -64,6 +112,8 @@ class _ClassesTabState extends State<ClassesTab> {
   void dispose() {
     _eventSubscription?.cancel();
     _paymentRefreshSubscription?.cancel();
+    _userEnrollmentsSub?.cancel();
+    _globalEnrollmentsSub?.cancel();
     super.dispose();
   }
 
@@ -382,7 +432,6 @@ class _ClassesTabState extends State<ClassesTab> {
           // Classes List
           Flexible(
             child: StreamBuilder<List<DanceClass>>(
-              key: ValueKey(_refreshKey),
               stream: _getClassesStream(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -586,77 +635,44 @@ class _ClassesTabState extends State<ClassesTab> {
     );
   }
 
-  // New method for class card with enrollment status
   Widget _buildClassCardWithEnrollmentStatus(DanceClass danceClass) {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
-      return _buildClassCard(danceClass);
-    }
+    final status = _enrollmentStatusMap[danceClass.id];
+    final isEnrolled = status == 'enrolled' || status == 'completed';
 
-    // Check enrollment in user subcollection (more reliable) and global collection (fallback)
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUser.uid)
-          .collection('enrollments')
-          .doc(danceClass.id)
-          .snapshots(),
-      builder: (context, userEnrollmentSnapshot) {
-        // Also check global collection as fallback
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-              .collection('enrollments')
-          .where('userId', isEqualTo: currentUser.uid)
-          .where('itemId', isEqualTo: danceClass.id)
-          .where('status', isEqualTo: 'enrolled')
-              .limit(1)
-          .snapshots(),
-          builder: (context, globalEnrollmentSnapshot) {
-            final userEnrolled = userEnrollmentSnapshot.hasData && 
-                userEnrollmentSnapshot.data!.exists &&
-                (userEnrollmentSnapshot.data!.data()?['status'] == 'enrolled');
-            final globalEnrolled = globalEnrollmentSnapshot.hasData && 
-                globalEnrollmentSnapshot.data!.docs.isNotEmpty;
-            final isEnrolled = userEnrolled || globalEnrolled;
-        
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: Stack(
-            children: [
-              _buildClassCard(danceClass),
-              if (isEnrolled)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.green,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.check_circle, color: Colors.white, size: 12),
-                        SizedBox(width: 4),
-                        Text(
-                          'Enrolled',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Stack(
+        children: [
+          _buildClassCard(danceClass),
+          if (isEnrolled)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-            ],
-          ),
-        );
-          },
-        );
-      },
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.white, size: 12),
+                    SizedBox(width: 4),
+                    Text(
+                      'Enrolled',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
   Widget _buildClassCard(DanceClass danceClass) {
@@ -841,7 +857,7 @@ class _ClassesTabState extends State<ClassesTab> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _EnrolButton(danceClassId: danceClass.id, danceClassName: danceClass.name, isFull: danceClass.isFullyBooked, onBook: () => _bookClass(danceClass)),
+                  child: _EnrolButton(danceClassId: danceClass.id, danceClassName: danceClass.name, isFull: danceClass.isFullyBooked, onBook: () => _bookClass(danceClass), enrollmentStatus: _enrollmentStatusMap[danceClass.id]),
                 ),
               ],
             ),
@@ -856,7 +872,7 @@ class _ClassesTabState extends State<ClassesTab> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _ClassDetailsModal(danceClass: danceClass),
+      builder: (context) => _ClassDetailsModal(danceClass: danceClass, enrollmentStatus: _enrollmentStatusMap[danceClass.id]),
     );
   }
 
@@ -1002,11 +1018,11 @@ class _ClassesTabState extends State<ClassesTab> {
   }
 }
 
-// Class Details Modal
 class _ClassDetailsModal extends StatefulWidget {
   final DanceClass danceClass;
+  final String? enrollmentStatus;
 
-  const _ClassDetailsModal({required this.danceClass});
+  const _ClassDetailsModal({required this.danceClass, this.enrollmentStatus});
 
   @override
   State<_ClassDetailsModal> createState() => _ClassDetailsModalState();
@@ -1380,69 +1396,40 @@ class _ClassDetailsModalState extends State<_ClassDetailsModal> {
                     },
                   ),
                   
-                  // Action Buttons - Check enrollment status
-                  StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                    stream: FirebaseAuth.instance.currentUser != null
-                        ? FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(FirebaseAuth.instance.currentUser!.uid)
-                            .collection('enrollments')
-                            .doc(danceClass.id)
-                            .snapshots()
-                        : null,
-                    builder: (context, userEnrollmentSnap) {
-                      return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                        stream: FirebaseAuth.instance.currentUser != null
-                            ? FirebaseFirestore.instance
-                                .collection('enrollments')
-                                .where('userId', isEqualTo: FirebaseAuth.instance.currentUser!.uid)
-                                .where('itemId', isEqualTo: danceClass.id)
-                                .where('status', whereIn: ['enrolled', 'completed'])
-                                .limit(1)
-                                .snapshots()
-                            : null,
-                        builder: (context, globalEnrollmentSnap) {
-                          final userStatus = (userEnrollmentSnap.hasData && userEnrollmentSnap.data!.exists)
-                              ? (userEnrollmentSnap.data!.data()?['status'] as String?)
-                              : null;
-                          final userEnrolled = userStatus == 'enrolled' || userStatus == 'completed';
-                          final globalEnrolled = globalEnrollmentSnap.hasData &&
-                              globalEnrollmentSnap.data!.docs.isNotEmpty;
-                          final isEnrolled = userEnrolled || globalEnrolled;
-                          final isCompleted = userStatus == 'completed' || 
-                              (globalEnrollmentSnap.hasData && 
-                               globalEnrollmentSnap.data!.docs.any((doc) => doc.data()['status'] == 'completed'));
+                  Builder(
+                    builder: (context) {
+                      final status = widget.enrollmentStatus;
+                      final isEnrolled = status == 'enrolled' || status == 'completed';
+                      final isCompleted = status == 'completed';
 
-                          return Row(
-                            children: [
-                              Expanded(
-                                child: isEnrolled
-                                    ? ElevatedButton.icon(
-                                        onPressed: null,
-                                        icon: Icon(isCompleted ? Icons.check_circle_outline : Icons.check_circle, size: 18),
-                                        label: Text(isCompleted ? 'Completed' : 'Enrolled'),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: isCompleted ? Colors.orange : Colors.green,
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(vertical: 12),
-                                        ),
-                                      )
-                                    : ElevatedButton.icon(
-                                        onPressed: danceClass.isFullyBooked
-                                            ? null
-                                            : () => _joinClassNow(context, danceClass),
-                                        icon: const Icon(Icons.login, size: 18),
-                                        label: Text(danceClass.isFullyBooked ? 'Full' : 'Join Now'),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFFE53935),
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(vertical: 12),
-                                        ),
-                                      ),
-                              ),
-                            ],
-                          );
-                        },
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: isEnrolled
+                                ? ElevatedButton.icon(
+                                    onPressed: null,
+                                    icon: Icon(isCompleted ? Icons.check_circle_outline : Icons.check_circle, size: 18),
+                                    label: Text(isCompleted ? 'Completed' : 'Enrolled'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: isCompleted ? Colors.orange : Colors.green,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                    ),
+                                  )
+                                : ElevatedButton.icon(
+                                    onPressed: danceClass.isFullyBooked
+                                        ? null
+                                        : () => _joinClassNow(context, danceClass),
+                                    icon: const Icon(Icons.login, size: 18),
+                                    label: Text(danceClass.isFullyBooked ? 'Full' : 'Join Now'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFE53935),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                    ),
+                                  ),
+                          ),
+                        ],
                       );
                     },
                   ),
