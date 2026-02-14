@@ -2202,13 +2202,15 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
       final storage = FirebaseStorage.instance;
       final ts = DateTime.now().millisecondsSinceEpoch;
 
+      Reference? videoRef;
+      Reference? thumbRef;
+
       if (_videoFile != null) {
         WakelockPlus.enable();
         setState(() => _uploadProgress = 0.1);
-        final ref = storage.ref().child('online_videos/$ts.mp4');
+        videoRef = storage.ref().child('online_videos/$ts.mp4');
         
-        // Upload with progress tracking
-        final uploadTask = ref.putFile(_videoFile!);
+        final uploadTask = videoRef.putFile(_videoFile!);
         
         _uploadSubscription?.cancel();
         _uploadSubscription = uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
@@ -2217,14 +2219,14 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
         });
         
         await uploadTask;
-        videoUrl = await ref.getDownloadURL();
+        videoUrl = await videoRef.getDownloadURL();
         if (mounted) setState(() => _uploadProgress = 0.8);
       }
 
       if (_thumbFile != null) {
-        final ref = storage.ref().child('online_videos/thumbs/$ts.jpg');
-        await ref.putFile(_thumbFile!);
-        thumbUrl = await ref.getDownloadURL();
+        thumbRef = storage.ref().child('online_videos/thumbs/$ts.jpg');
+        await thumbRef.putFile(_thumbFile!);
+        thumbUrl = await thumbRef.getDownloadURL();
       }
 
       if (!mounted) return;
@@ -2247,7 +2249,7 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
         'views': 0,
         'likes': 0,
         if (videoUrl != null) 'videoUrl': videoUrl,
-        if (videoUrl != null) 'url': videoUrl, // Keep both for compatibility
+        if (videoUrl != null) 'url': videoUrl,
         if (thumbUrl != null) 'thumbnail': thumbUrl,
         if (_scheduledDate != null) 'scheduledDate': Timestamp.fromDate(_scheduledDate!),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -2255,16 +2257,26 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
 
       if (mounted) setState(() => _uploadProgress = 0.9);
       
-      final col = FirebaseFirestore.instance.collection('onlineVideos');
-      if (widget.videoId == null) {
-        await col.add({
-          ...data,
-          'createdAt': FieldValue.serverTimestamp(),
-          'views': 0,
-          'likes': 0,
-        });
-      } else {
-        await col.doc(widget.videoId).set(data, SetOptions(merge: true));
+      try {
+        final col = FirebaseFirestore.instance.collection('onlineVideos');
+        if (widget.videoId == null) {
+          await col.add({
+            ...data,
+            'createdAt': FieldValue.serverTimestamp(),
+            'views': 0,
+            'likes': 0,
+          });
+        } else {
+          await col.doc(widget.videoId).set(data, SetOptions(merge: true));
+        }
+      } catch (firestoreError) {
+        if (videoRef != null) {
+          try { await videoRef.delete(); } catch (_) {}
+        }
+        if (thumbRef != null) {
+          try { await thumbRef.delete(); } catch (_) {}
+        }
+        rethrow;
       }
       
       setState(() => _uploadProgress = 1.0);

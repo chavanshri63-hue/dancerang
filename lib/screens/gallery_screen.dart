@@ -1318,24 +1318,27 @@ class _GalleryScreenState extends State<GalleryScreen> {
       final TaskSnapshot snapshot = await uploadTask;
       final String downloadUrl = await snapshot.ref.getDownloadURL();
 
-      // Cancel the progress subscription
       await _uploadSubscription?.cancel();
 
-      // Save metadata to Firestore
-      await FirebaseFirestore.instance.collection('gallery').add({
-        'title': _titleController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'category': _selectedCategoryForUpload,
-        'mediaType': _selectedMediaType,
-        'url': downloadUrl,
-        'uploadedAt': FieldValue.serverTimestamp(),
-        'uploadedBy': 'admin', // In real app, get from auth
-      });
+      try {
+        await FirebaseFirestore.instance.collection('gallery').add({
+          'title': _titleController.text.trim(),
+          'description': _descriptionController.text.trim(),
+          'category': _selectedCategoryForUpload,
+          'mediaType': _selectedMediaType,
+          'url': downloadUrl,
+          'uploadedAt': FieldValue.serverTimestamp(),
+          'uploadedBy': 'admin',
+        });
+      } catch (firestoreError) {
+        try {
+          await ref.delete();
+        } catch (_) {}
+        rethrow;
+      }
 
-      // Close loading dialog
       Navigator.pop(context);
       
-      // Close upload form
       Navigator.pop(context);
 
       // Clear form
@@ -1536,7 +1539,19 @@ class _GalleryScreenState extends State<GalleryScreen> {
       });
 
       try {
+        final deletedCount = _selectedItems.length;
         for (String docId in _selectedItems) {
+          try {
+            final doc = await FirebaseFirestore.instance.collection('gallery').doc(docId).get();
+            if (doc.exists) {
+              final url = doc.data()?['url'] as String?;
+              if (url != null && url.isNotEmpty) {
+                try {
+                  await FirebaseStorage.instance.refFromURL(url).delete();
+                } catch (_) {}
+              }
+            }
+          } catch (_) {}
           await FirebaseFirestore.instance.collection('gallery').doc(docId).delete();
         }
 
@@ -1547,7 +1562,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${_selectedItems.length} item(s) deleted successfully'),
+            content: Text('$deletedCount item(s) deleted successfully'),
             backgroundColor: const Color(0xFF10B981),
           ),
         );
@@ -1598,6 +1613,17 @@ class _GalleryScreenState extends State<GalleryScreen> {
       });
 
       try {
+        try {
+          final doc = await FirebaseFirestore.instance.collection('gallery').doc(docId).get();
+          if (doc.exists) {
+            final url = doc.data()?['url'] as String?;
+            if (url != null && url.isNotEmpty) {
+              try {
+                await FirebaseStorage.instance.refFromURL(url).delete();
+              } catch (_) {}
+            }
+          }
+        } catch (_) {}
         await FirebaseFirestore.instance.collection('gallery').doc(docId).delete();
         
         ScaffoldMessenger.of(context).showSnackBar(

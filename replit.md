@@ -61,6 +61,11 @@ flutter build web --release --base-href "/" && python3 serve.py
   - Fixed new class notifications: replaced local per-student loop with single `notifications` collection write, triggering existing `sendAdminNotification` Cloud Function for FCM broadcast
   - Fixed new workshop notifications: same approach as class notifications
   - Removed unused `LiveNotificationService` imports from admin_classes_management_screen and workshop_service
+- 2026-02-14: Upload data safety fixes (mobile-only, no UI/behavior changes)
+  - Gallery upload: if Firestore write fails after Storage upload, the orphaned Storage file is automatically deleted (rollback)
+  - Online video upload: if Firestore write fails after video/thumbnail upload, all uploaded Storage files are cleaned up (rollback)
+  - Gallery single delete: now deletes the Firebase Storage file before removing the Firestore document
+  - Gallery bulk delete: same Storage cleanup applied per item before Firestore doc deletion
 - 2026-02-14: Upload reliability fixes (mobile-only, no UI/behavior changes)
   - Added `wakelock_plus` package to keep screen awake during video uploads, preventing iOS/Android background kill
   - Gallery upload: wakelock enabled only for video uploads, disabled in finally block (photos unaffected)
