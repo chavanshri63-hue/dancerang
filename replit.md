@@ -54,6 +54,11 @@ flutter build web --release --base-href "/" && python3 serve.py
 - SDK constraint set to `^3.8.0` for compatibility with available Flutter SDK
 
 ## Recent Changes
+- 2026-02-22: Workshop enrolled students list fix (mobile-only, admin UI)
+  - Admin workshop enrolled students list now includes both `enrolled` and `completed` (attended) students
+  - Students no longer disappear from admin's list after QR attendance is marked
+  - Each student shows "Attended" (green badge + checkmark) or "Enrolled" (orange badge) status
+  - Total count now shows "Total enrolled: X | Attended: Y" breakdown
 - 2026-02-22: Class re-join flow (mobile-only, UI + backend)
   - Students can now re-join a class after completing all sessions (same flow as first-time join)
   - Backend: Added `_archiveCompletedEnrollments()` in ClassEnrollmentService — archives old completed records (status → `re_enrolled`) in all 3 collections (global enrollments, user subcollection, class_enrollments) before new enrollment

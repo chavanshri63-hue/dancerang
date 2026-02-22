@@ -1508,7 +1508,7 @@ class _WorkshopDetailsModal extends StatelessWidget {
                       .collection('enrollments')
                       .where('itemType', isEqualTo: 'workshop')
                       .where('itemId', isEqualTo: workshop.id)
-                      .where('status', isEqualTo: 'enrolled')
+                      .where('status', whereIn: ['enrolled', 'completed'])
                       .snapshots(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
@@ -1536,6 +1536,7 @@ class _WorkshopDetailsModal extends StatelessWidget {
                         final userId = enrol['userId'] as String?;
                         final completed = enrol['completedSessions'] ?? 0;
                         final total = enrol['totalSessions'] ?? 1;
+                        final isAttended = enrol['status'] == 'completed';
                         return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                           future: userId == null
                               ? null
@@ -1545,17 +1546,33 @@ class _WorkshopDetailsModal extends StatelessWidget {
                             final phone = userSnap.data?.data()?['phone'] ?? '';
                             return ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: const Color(0xFFE53935).withValues(alpha: 0.15),
-                                child: const Icon(Icons.person, color: Color(0xFFE53935)),
+                                backgroundColor: isAttended
+                                    ? Colors.green.withValues(alpha: 0.15)
+                                    : const Color(0xFFE53935).withValues(alpha: 0.15),
+                                child: Icon(
+                                  isAttended ? Icons.check_circle : Icons.person,
+                                  color: isAttended ? Colors.green : const Color(0xFFE53935),
+                                ),
                               ),
                               title: Text(name, style: const TextStyle(color: Colors.white)),
                               subtitle: Text(
                                 phone.isNotEmpty ? '+91 $phone' : 'Progress: $completed/$total',
                                 style: const TextStyle(color: Colors.white70),
                               ),
-                              trailing: Text(
-                                '$completed/$total',
-                                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                              trailing: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isAttended ? Colors.green.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  isAttended ? 'Attended' : 'Enrolled',
+                                  style: TextStyle(
+                                    color: isAttended ? Colors.green : Colors.orange,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ),
                             );
                           },
@@ -1575,12 +1592,14 @@ class _WorkshopDetailsModal extends StatelessWidget {
                           .collection('enrollments')
                           .where('itemType', isEqualTo: 'workshop')
                           .where('itemId', isEqualTo: workshop.id)
-                          .where('status', isEqualTo: 'enrolled')
+                          .where('status', whereIn: ['enrolled', 'completed'])
                           .snapshots(),
                       builder: (context, s) {
-                        final count = s.data?.docs.length ?? 0;
+                        final docs = s.data?.docs ?? [];
+                        final totalCount = docs.length;
+                        final attendedCount = docs.where((d) => d.data()['status'] == 'completed').length;
                         return Text(
-                          'Total enrolled: $count',
+                          'Total enrolled: $totalCount  |  Attended: $attendedCount',
                           style: const TextStyle(color: Colors.white60, fontSize: 12),
                         );
                       },
