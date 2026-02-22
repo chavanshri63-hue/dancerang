@@ -637,31 +637,32 @@ class _ClassesTabState extends State<ClassesTab> {
 
   Widget _buildClassCardWithEnrollmentStatus(DanceClass danceClass) {
     final status = _enrollmentStatusMap[danceClass.id];
-    final isEnrolled = status == 'enrolled' || status == 'completed';
+    final isEnrolled = status == 'enrolled';
+    final isCompleted = status == 'completed';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       child: Stack(
         children: [
           _buildClassCard(danceClass),
-          if (isEnrolled)
+          if (isEnrolled || isCompleted)
             Positioned(
               top: 8,
               right: 8,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.green,
+                  color: isCompleted ? Colors.orange : Colors.green,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.check_circle, color: Colors.white, size: 12),
-                    SizedBox(width: 4),
+                    Icon(isCompleted ? Icons.check_circle_outline : Icons.check_circle, color: Colors.white, size: 12),
+                    const SizedBox(width: 4),
                     Text(
-                      'Enrolled',
-                      style: TextStyle(
+                      isCompleted ? 'Completed' : 'Enrolled',
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
@@ -1399,35 +1400,77 @@ class _ClassDetailsModalState extends State<_ClassDetailsModal> {
                   Builder(
                     builder: (context) {
                       final status = widget.enrollmentStatus;
-                      final isEnrolled = status == 'enrolled' || status == 'completed';
+                      final isEnrolled = status == 'enrolled';
                       final isCompleted = status == 'completed';
+
+                      if (isEnrolled) {
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: null,
+                                icon: const Icon(Icons.check_circle, size: 18),
+                                label: const Text('Enrolled'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+
+                      if (isCompleted) {
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: null,
+                                icon: const Icon(Icons.check_circle_outline, size: 18),
+                                label: const Text('Completed'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: danceClass.isFullyBooked
+                                    ? null
+                                    : () => _joinClassNow(context, danceClass),
+                                icon: const Icon(Icons.replay, size: 18),
+                                label: Text(danceClass.isFullyBooked ? 'Full' : 'Re-join'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFE53935),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      }
 
                       return Row(
                         children: [
                           Expanded(
-                            child: isEnrolled
-                                ? ElevatedButton.icon(
-                                    onPressed: null,
-                                    icon: Icon(isCompleted ? Icons.check_circle_outline : Icons.check_circle, size: 18),
-                                    label: Text(isCompleted ? 'Completed' : 'Enrolled'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: isCompleted ? Colors.orange : Colors.green,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
-                                    ),
-                                  )
-                                : ElevatedButton.icon(
-                                    onPressed: danceClass.isFullyBooked
-                                        ? null
-                                        : () => _joinClassNow(context, danceClass),
-                                    icon: const Icon(Icons.login, size: 18),
-                                    label: Text(danceClass.isFullyBooked ? 'Full' : 'Join Now'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFFE53935),
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
-                                    ),
-                                  ),
+                            child: ElevatedButton.icon(
+                              onPressed: danceClass.isFullyBooked
+                                  ? null
+                                  : () => _joinClassNow(context, danceClass),
+                              icon: const Icon(Icons.login, size: 18),
+                              label: Text(danceClass.isFullyBooked ? 'Full' : 'Join Now'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFE53935),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
                           ),
                         ],
                       );

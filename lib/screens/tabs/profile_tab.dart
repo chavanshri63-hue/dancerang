@@ -43,7 +43,7 @@ class _EnrolButton extends StatefulWidget {
 class _EnrolButtonState extends State<_EnrolButton> {
 
   Widget _buildEnrollmentUI(bool enrolled, bool isCompleted) {
-    if (enrolled) {
+    if (enrolled && !isCompleted) {
       return Column(
         children: [
           Row(
@@ -52,17 +52,16 @@ class _EnrolButtonState extends State<_EnrolButton> {
                 flex: 2,
                 child: ElevatedButton.icon(
                   onPressed: null,
-                  icon: Icon(isCompleted ? Icons.check_circle_outline : Icons.check_circle, size: 14),
-                  label: Text(isCompleted ? 'Completed' : 'Enrolled', style: const TextStyle(fontSize: 12)),
+                  icon: const Icon(Icons.check_circle, size: 14),
+                  label: const Text('Enrolled', style: TextStyle(fontSize: 12)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isCompleted ? Colors.orange : Colors.green,
+                    backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                   ),
                 ),
               ),
-              if (!isCompleted) ...[
               const SizedBox(width: 6),
               Expanded(
                 flex: 2,
@@ -78,7 +77,45 @@ class _EnrolButtonState extends State<_EnrolButton> {
                   ),
                 ),
               ),
-              ],
+            ],
+          ),
+        ],
+      );
+    }
+    if (isCompleted) {
+      return Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: ElevatedButton.icon(
+                  onPressed: null,
+                  icon: const Icon(Icons.check_circle_outline, size: 14),
+                  label: const Text('Completed', style: TextStyle(fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton.icon(
+                  onPressed: widget.isFull ? null : widget.onBook,
+                  icon: const Icon(Icons.replay, size: 14),
+                  label: const Text('Re-join', style: TextStyle(fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE53935),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                ),
+              ),
             ],
           ),
         ],

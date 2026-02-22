@@ -19,7 +19,7 @@ class ClassEnrollmentService {
     required String userId,
   }) async {
     try {
-      // Check if user is already enrolled (before transaction)
+      // Check if user is already actively enrolled (before transaction)
       final existingEnrollment = await _firestore
           .collection(_enrollmentsCollection)
           .where('user_id', isEqualTo: userId)
@@ -34,6 +34,25 @@ class ClassEnrollmentService {
           'message': 'You are already enrolled in this class',
         };
       }
+
+      // Also check global enrollments for 'enrolled' status
+      final existingGlobalEnrolled = await _firestore
+          .collection('enrollments')
+          .where('userId', isEqualTo: userId)
+          .where('itemId', isEqualTo: classId)
+          .where('status', isEqualTo: 'enrolled')
+          .limit(1)
+          .get();
+
+      if (existingGlobalEnrolled.docs.isNotEmpty) {
+        return {
+          'success': false,
+          'message': 'You are already enrolled in this class',
+        };
+      }
+
+      // Archive old completed enrollments so re-join works cleanly
+      await _archiveCompletedEnrollments(userId, classId);
 
       // Use transaction to atomically check capacity and create enrollment
       final transactionResult = await _firestore.runTransaction<Map<String, dynamic>>((transaction) async {
@@ -403,6 +422,57 @@ class ClassEnrollmentService {
         'success': false,
         'message': ErrorHandler.getUserFriendlyMessage(e),
       };
+    }
+  }
+
+  /// Archive old completed enrollments before re-enrollment
+  static Future<void> _archiveCompletedEnrollments(String userId, String classId) async {
+    try {
+      // Archive completed records in global enrollments collection
+      final completedGlobal = await _firestore
+          .collection('enrollments')
+          .where('userId', isEqualTo: userId)
+          .where('itemId', isEqualTo: classId)
+          .where('status', isEqualTo: 'completed')
+          .get();
+
+      for (final doc in completedGlobal.docs) {
+        await doc.reference.update({
+          'status': 're_enrolled',
+          'archivedAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      // Archive completed record in user's enrollments subcollection
+      final userEnrollRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('enrollments')
+          .doc(classId);
+      final userEnrollDoc = await userEnrollRef.get();
+      if (userEnrollDoc.exists && userEnrollDoc.data()?['status'] == 'completed') {
+        await userEnrollRef.update({
+          'status': 're_enrolled',
+          'archivedAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      // Archive completed records in canonical class_enrollments collection
+      final completedCanonical = await _firestore
+          .collection(_enrollmentsCollection)
+          .where('user_id', isEqualTo: userId)
+          .where('classId', isEqualTo: classId)
+          .where('status', isEqualTo: 'completed')
+          .get();
+
+      for (final doc in completedCanonical.docs) {
+        await doc.reference.update({
+          'status': 're_enrolled',
+          'archivedAt': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      // Best-effort archival; don't block enrollment if this fails
     }
   }
 
