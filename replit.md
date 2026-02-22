@@ -54,6 +54,14 @@ flutter build web --release --base-href "/" && python3 serve.py
 - SDK constraint set to `^3.8.0` for compatibility with available Flutter SDK
 
 ## Recent Changes
+- 2026-02-22: Class re-join flow (mobile-only, UI + backend)
+  - Students can now re-join a class after completing all sessions (same flow as first-time join)
+  - Backend: Added `_archiveCompletedEnrollments()` in ClassEnrollmentService — archives old completed records (status → `re_enrolled`) in all 3 collections (global enrollments, user subcollection, class_enrollments) before new enrollment
+  - Backend: Added duplicate check for `enrolled` status in global enrollments to prevent double-join
+  - UI (_EnrolButton): Completed classes show "Completed" (orange) + "Re-join" (red) buttons side by side
+  - UI (_ClassDetailsModal): Same completed layout with "Completed" + "Re-join" buttons
+  - UI (class card badge): "Enrolled" = green badge, "Completed" = orange badge (previously both showed green "Enrolled")
+  - Re-join triggers identical payment/package flow as first-time enrollment
 - 2026-02-14: Classes tab performance optimization (mobile-only, no UI/behavior changes)
   - Replaced per-card enrollment StreamBuilders (4 listeners per card) with 2 list-level enrollment streams
   - User subcollection stream (`users/{uid}/enrollments`) + global enrollments stream merged into single status map
