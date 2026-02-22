@@ -54,6 +54,19 @@ flutter build web --release --base-href "/" && python3 serve.py
 - SDK constraint set to `^3.8.0` for compatibility with available Flutter SDK
 
 ## Recent Changes
+- 2026-02-22: Payment reliability & error handling fixes (mobile-only, no UI/behavior changes)
+  - Enrollment now starts as `pending_payment` status (was `active`), only becomes `active` after successful payment
+  - Added `_cleanupStalePendingEnrollments()` — auto-cancels `pending_payment` records older than 30 minutes
+  - Post-payment Firestore transaction retries up to 3 times with exponential backoff (500ms, 1000ms)
+  - If all retries fail, marks enrollment as `payment_success_unfulfilled` for manual reconciliation + reports to Crashlytics
+  - Payment failure properly cleans up the `pending_payment` enrollment record with error reporting
+  - ClassEnrollment model updated: new statuses `pending_payment`, `payment_success_unfulfilled`; statusText getter handles them
+  - Profile tab "Pay Now" button now navigates to Classes tab with helpful SnackBar (was dead end with TODO)
+  - HomeScreenState made public with `switchToTab()` method for cross-tab navigation
+  - Fixed 13 empty catch blocks in `live_attendance_service.dart` — all now report via ErrorHandler
+  - Added 9 `if (!mounted) return;` guards in `admin_dashboard_screen.dart` before async setState calls
+  - Added ErrorHandler to ~52 catch blocks across 5 screen files (admin_dashboard, admin_online_management, gallery, admin_classes_management, my_workshops)
+  - Replaced 19 `print()` calls with `debugPrint()` in `main.dart` and `class_enrollment_expiry_service.dart`
 - 2026-02-22: Workshop enrolled students list fix (mobile-only, admin UI)
   - Admin workshop enrolled students list now includes both `enrolled` and `completed` (attended) students
   - Students no longer disappear from admin's list after QR attendance is marked
