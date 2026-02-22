@@ -36,7 +36,7 @@ Future<void> _initializeBackgroundServices() async {
     LiveNotificationService.startSpotMonitoring();
   } catch (e) {
     if (kDebugMode) {
-      print('❌ Error initializing live notifications: $e');
+      debugPrint('❌ Error initializing live notifications: $e');
     }
   }
 
@@ -52,7 +52,7 @@ Future<void> _initializeBackgroundServices() async {
         userRole = ((userDoc.data() ?? const {})['role'] as String?)?.toLowerCase();
       } catch (e) {
         if (kDebugMode) {
-          print('Error loading user role for background services: $e');
+          debugPrint('Error loading user role for background services: $e');
         }
       }
     }
@@ -64,7 +64,7 @@ Future<void> _initializeBackgroundServices() async {
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Error in payment validity monitoring: $e');
+        debugPrint('Error in payment validity monitoring: $e');
       }
     }
 
@@ -75,7 +75,7 @@ Future<void> _initializeBackgroundServices() async {
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Error in attendance alert monitoring: $e');
+        debugPrint('Error in attendance alert monitoring: $e');
       }
     }
 
@@ -86,7 +86,7 @@ Future<void> _initializeBackgroundServices() async {
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Error in class enrollments expiry check: $e');
+        debugPrint('Error in class enrollments expiry check: $e');
       }
     }
 
@@ -97,7 +97,7 @@ Future<void> _initializeBackgroundServices() async {
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Error in background renewal service: $e');
+        debugPrint('Error in background renewal service: $e');
       }
     }
 
@@ -109,7 +109,7 @@ Future<void> _initializeBackgroundServices() async {
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Error initializing style lists: $e');
+        debugPrint('Error initializing style lists: $e');
       }
     }
 
@@ -118,7 +118,7 @@ Future<void> _initializeBackgroundServices() async {
       await BirthdayService.checkAndSendBirthdayWishes();
     } catch (e) {
       if (kDebugMode) {
-        print('Error checking birthday wishes: $e');
+        debugPrint('Error checking birthday wishes: $e');
       }
     }
   });
@@ -139,7 +139,7 @@ Future<void> _initializeFirebaseAndServices() async {
     }
   } catch (e) {
     if (kDebugMode) {
-      print('FCM service initialization error: $e');
+      debugPrint('FCM service initialization error: $e');
     }
   }
 
@@ -148,7 +148,7 @@ Future<void> _initializeFirebaseAndServices() async {
       if (!kIsWeb) {
         FCMService.initialize().catchError((e) {
           if (kDebugMode) {
-            print('Error re-initializing FCM after login: $e');
+            debugPrint('Error re-initializing FCM after login: $e');
           }
         });
       }
@@ -188,7 +188,7 @@ Future<void> _initializeFirebaseAndServices() async {
     PaymentService.initialize();
   } catch (e) {
     if (kDebugMode) {
-      print('Payment service initialization error: $e');
+      debugPrint('Payment service initialization error: $e');
     }
   }
 

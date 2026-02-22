@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../utils/qr_stub.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import '../utils/error_handler.dart';
 
 // String extension for capitalization
 extension StringExtension on String {
@@ -79,7 +80,7 @@ class LiveAttendanceService {
         if (canonical.docs.isNotEmpty) {
           canonicalEnrollment = canonical.docs.first;
         }
-      } catch (_) {}
+      } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'Canonical enrollment lookup for class attendance'); }
 
       if (enrollmentCheck.docs.isEmpty && canonicalEnrollment == null) {
         return {
@@ -178,8 +179,7 @@ class LiveAttendanceService {
           });
         } else {
         }
-      } catch (e) {
-      }
+      } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'Update class attendance count after QR scan'); }
 
       // Update user's session progress in enrollment
       await _updateUserSessionProgress(userId, classId);
@@ -291,8 +291,7 @@ class LiveAttendanceService {
           });
         } else {
         }
-      } catch (e) {
-      }
+      } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'Update workshop attendance count'); }
 
       // Update user's workshop session progress
       await _updateWorkshopSessionProgress(userId, resolvedWorkshopId);
@@ -398,7 +397,7 @@ class LiveAttendanceService {
           canonicalEnrollment = canonical.docs.first;
           classId = canonicalEnrollment.data()['classId'] as String?;
         }
-      } catch (_) {}
+      } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'Canonical class enrollment lookup for direct attendance'); }
 
       if (classId == null) {
         final enrollment = validEnrollments.isNotEmpty ? validEnrollments.first : classEnrollments.first;
@@ -479,8 +478,7 @@ class LiveAttendanceService {
           });
         } else {
         }
-      } catch (e) {
-      }
+      } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'Update class attendance count for direct marking'); }
 
       // Update user's session progress
       await _updateUserSessionProgress(userId, classId);
@@ -527,10 +525,9 @@ class LiveAttendanceService {
                   'remainingSessions': 2,
                 },
               });
-            } catch (_) {}
+            } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'Send low sessions warning notification'); }
           }
-        } catch (e) {
-        }
+        } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'Update canonical enrollment session progress'); }
       }
 
       // Update global attendance stats
@@ -595,12 +592,10 @@ class LiveAttendanceService {
               'updatedAt': FieldValue.serverTimestamp(),
             });
           }
-        } catch (e) {
-        }
+        } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'Update user workshop enrollment subcollection'); }
 
       }
-    } catch (e) {
-    }
+    } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'Update workshop session progress'); }
   }
 
   /// Update user's session progress when attendance is marked
@@ -670,12 +665,10 @@ class LiveAttendanceService {
             
             await userEnrollmentRef.update(userUpdates);
           }
-        } catch (e) {
-        }
+        } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'Update user class enrollment subcollection'); }
 
       }
-    } catch (e) {
-    }
+    } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'Update user session progress'); }
   }
 
   /// Trigger home screen stats update after attendance marking
@@ -689,8 +682,7 @@ class LiveAttendanceService {
         'lastAttendanceUpdate': FieldValue.serverTimestamp(),
         'userId': userId,
       }, SetOptions(merge: true));
-    } catch (e) {
-    }
+    } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'Trigger home screen stats update'); }
   }
 
   /// Get live attendance for a class
@@ -776,8 +768,7 @@ class LiveAttendanceService {
         'lastUpdated': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-    } catch (e) {
-    }
+    } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'Update global attendance stats'); }
   }
 
   /// Get class attendance statistics

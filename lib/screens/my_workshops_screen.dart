@@ -5,6 +5,7 @@ import 'dart:async';
 import '../widgets/glassmorphism_app_bar.dart';
 import '../services/payment_service.dart';
 import '../widgets/payment_option_dialog.dart';
+import '../utils/error_handler.dart';
 import 'add_edit_workshop_screen.dart';
 import 'workshop_qr_display_screen.dart';
 import 'qr_scanner_screen.dart';
@@ -1094,7 +1095,8 @@ class _MyWorkshopsScreenState extends State<MyWorkshopsScreen> with TickerProvid
           );
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'starting workshop payment');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error starting payment: $e'),
@@ -1197,7 +1199,8 @@ class _MyWorkshopsScreenState extends State<MyWorkshopsScreen> with TickerProvid
             ),
           );
         }
-      } catch (e) {
+      } catch (e, stackTrace) {
+        ErrorHandler.handleError(e, stackTrace, context: 'deleting workshop');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(

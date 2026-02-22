@@ -5,6 +5,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
 import '../widgets/glassmorphism_app_bar.dart';
+import '../utils/error_handler.dart';
 import '../services/app_config_service.dart';
 import 'admin_background_management_screen.dart';
 import 'notifications_screen.dart';
@@ -1112,7 +1113,8 @@ class _StudioBranchesDialogState extends State<_StudioBranchesDialog> {
           SnackBar(content: Text('Branch "$name" added'), backgroundColor: Colors.green),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'adding branch');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to add branch: $e'), backgroundColor: Colors.red),
@@ -1253,7 +1255,8 @@ class _StudioPricingDialogState extends State<_StudioPricingDialog> {
                 const SnackBar(content: Text('Pricing updated successfully!')),
               );
               Navigator.pop(context);
-            } catch (e) {
+            } catch (e, stackTrace) {
+              ErrorHandler.handleError(e, stackTrace, context: 'updating studio pricing');
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Failed to update pricing. Please try again.'),
@@ -1341,7 +1344,8 @@ class _PackageDealsDialogState extends State<_PackageDealsDialog> {
                 const SnackBar(content: Text('Package deals updated successfully!')),
               );
               Navigator.pop(context);
-            } catch (e) {
+            } catch (e, stackTrace) {
+              ErrorHandler.handleError(e, stackTrace, context: 'updating package deals');
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Failed to update pricing. Please try again.'),
@@ -1418,7 +1422,8 @@ class _EquipmentDialogState extends State<_EquipmentDialog> {
                 const SnackBar(content: Text('Equipment list updated successfully!')),
               );
               Navigator.pop(context);
-            } catch (e) {
+            } catch (e, stackTrace) {
+              ErrorHandler.handleError(e, stackTrace, context: 'updating equipment list');
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Failed to update pricing. Please try again.'),
@@ -1495,7 +1500,8 @@ class _StudioRulesDialogState extends State<_StudioRulesDialog> {
                 const SnackBar(content: Text('Studio rules updated successfully!')),
               );
               Navigator.pop(context);
-            } catch (e) {
+            } catch (e, stackTrace) {
+              ErrorHandler.handleError(e, stackTrace, context: 'updating studio rules');
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Failed to update pricing. Please try again.'),
@@ -1536,11 +1542,13 @@ class _StudioGalleryDialogState extends State<_StudioGalleryDialog> {
           .get();
 
       if (doc.exists) {
+        if (!mounted) return;
         setState(() {
           _galleryImages = List<String>.from(doc.data()?['galleryImages'] ?? []);
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading gallery data');
     }
   }
 
@@ -1670,6 +1678,7 @@ class _StudioGalleryDialogState extends State<_StudioGalleryDialog> {
       if (image != null) {
         // Upload to Firebase Storage
         final String downloadUrl = await _uploadFileToStorage(image.path, 'images');
+        if (!mounted) return;
         setState(() {
           _galleryImages.add(downloadUrl);
         });
@@ -1678,7 +1687,8 @@ class _StudioGalleryDialogState extends State<_StudioGalleryDialog> {
           const SnackBar(content: Text('Image uploaded successfully!')),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'uploading studio image');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error uploading image: $e')),
       );
@@ -1723,7 +1733,8 @@ class _StudioGalleryDialogState extends State<_StudioGalleryDialog> {
         const SnackBar(content: Text('Gallery updated successfully!')),
       );
       Navigator.pop(context);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'saving studio gallery');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to save gallery. Please try again.'),
@@ -1731,9 +1742,11 @@ class _StudioGalleryDialogState extends State<_StudioGalleryDialog> {
         ),
       );
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 }
@@ -1758,6 +1771,7 @@ class _StudioBannersDialogState extends State<_StudioBannersDialog> {
     final jsonList = await AdminService.readStudioBannersJson();
     final items = jsonList.map((e) => AppBanner.fromMap(e)).toList()
       ..sort((a, b) => a.sort.compareTo(b.sort));
+    if (!mounted) return;
     setState(() {
       _banners = items;
       _loadingBanners = false;
@@ -1951,6 +1965,7 @@ class _StudioBannersDialogState extends State<_StudioBannersDialog> {
       );
     }
     await _saveBanners();
+    if (!mounted) return;
     setState(() {});
   }
 
@@ -1970,6 +1985,7 @@ class _StudioBannersDialogState extends State<_StudioBannersDialog> {
       );
     }
     await _saveBanners();
+    if (!mounted) return;
     setState(() {});
   }
 
@@ -2137,7 +2153,8 @@ class _StudioCapacityDialogState extends State<_StudioCapacityDialog> {
                 const SnackBar(content: Text('Studio capacity updated successfully!')),
               );
               Navigator.pop(context);
-            } catch (e) {
+            } catch (e, stackTrace) {
+              ErrorHandler.handleError(e, stackTrace, context: 'updating studio capacity');
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Failed to update pricing. Please try again.'),
@@ -2200,7 +2217,8 @@ class _GracePeriodDialogState extends State<_GracePeriodDialog> {
                 const SnackBar(content: Text('Grace period updated successfully!')),
               );
               Navigator.pop(context);
-            } catch (e) {
+            } catch (e, stackTrace) {
+              ErrorHandler.handleError(e, stackTrace, context: 'updating grace period');
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Failed to update pricing. Please try again.'),
@@ -2295,7 +2313,8 @@ class _BookingSettingsDialogState extends State<_BookingSettingsDialog> {
                 const SnackBar(content: Text('Booking settings updated successfully!')),
               );
               Navigator.pop(context);
-            } catch (e) {
+            } catch (e, stackTrace) {
+              ErrorHandler.handleError(e, stackTrace, context: 'updating booking settings');
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Failed to update pricing. Please try again.'),
@@ -2339,6 +2358,7 @@ class _ContactInfoDialogState extends State<_ContactInfoDialog> {
       
       if (doc.exists) {
         final data = doc.data()!;
+        if (!mounted) return;
         setState(() {
           _phoneController.text = data['phone'] ?? '+91 98765 43210';
           _whatsappController.text = data['whatsapp'] ?? '919999999999';
@@ -2346,6 +2366,7 @@ class _ContactInfoDialogState extends State<_ContactInfoDialog> {
           _isLoading = false;
         });
       } else {
+        if (!mounted) return;
         setState(() {
           _phoneController.text = '+91 98765 43210';
           _whatsappController.text = '919999999999';
@@ -2353,7 +2374,9 @@ class _ContactInfoDialogState extends State<_ContactInfoDialog> {
           _isLoading = false;
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading contact info');
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
@@ -2457,7 +2480,8 @@ class _ContactInfoDialogState extends State<_ContactInfoDialog> {
         );
         Navigator.pop(context);
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'saving contact info');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -2530,7 +2554,8 @@ class _StudioStatusDialogState extends State<_StudioStatusDialog> {
                 SnackBar(content: Text('Studio status updated: ${_isStudioOpen ? 'Open' : 'Closed'}')),
               );
               Navigator.pop(context);
-            } catch (e) {
+            } catch (e, stackTrace) {
+              ErrorHandler.handleError(e, stackTrace, context: 'updating studio status');
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Failed to update pricing. Please try again.'),

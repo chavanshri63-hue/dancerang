@@ -91,11 +91,19 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreen> createState() => HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+
+  void switchToTab(int index) {
+    if (index >= 0 && index < 5) {
+      setState(() {
+        _currentIndex = index;
+      });
+    }
+  }
   String? _backgroundImageUrl;
 
   List<Widget> get _screens => [

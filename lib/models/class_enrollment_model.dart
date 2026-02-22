@@ -13,7 +13,7 @@ class ClassEnrollment {
   final int remainingSessions;
   final DateTime startDate;
   final DateTime endDate;
-  final String status; // 'active', 'expired', 'completed', 'cancelled'
+  final String status; // 'active', 'pending_payment', 'expired', 'completed', 'cancelled', 'payment_success_unfulfilled'
   final double packagePrice;
   final String paymentStatus; // 'paid', 'pending', 'failed'
   final DateTime? lastAttendanceDate;
@@ -100,6 +100,8 @@ class ClassEnrollment {
   double get progressPercentage => totalSessions > 0 ? (completedSessions / totalSessions) * 100 : 0;
   
   String get statusText {
+    if (status == 'pending_payment') return 'Payment Pending';
+    if (status == 'payment_success_unfulfilled') return 'Contact Support';
     if (isCompleted) return 'Completed';
     if (isExpired) return 'Expired';
     if (needsPayment) return 'Payment Due';

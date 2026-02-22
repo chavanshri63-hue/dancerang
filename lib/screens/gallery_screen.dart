@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:video_player/video_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../widgets/glassmorphism_app_bar.dart';
+import '../utils/error_handler.dart';
 
 class GalleryScreen extends StatefulWidget {
   final String role;
@@ -1334,10 +1335,13 @@ class _GalleryScreenState extends State<GalleryScreen> {
           'uploadedAt': FieldValue.serverTimestamp(),
           'uploadedBy': 'admin',
         });
-      } catch (firestoreError) {
+      } catch (firestoreError, stackTrace) {
+        ErrorHandler.handleError(firestoreError, stackTrace, context: 'saving gallery item to Firestore');
         try {
           await ref.delete();
-        } catch (_) {}
+        } catch (e, stackTrace) {
+          ErrorHandler.handleError(e, stackTrace, context: 'cleaning up uploaded file');
+        }
         rethrow;
       }
 
@@ -1360,7 +1364,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
       _refreshGallery();
 
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'uploading media');
       await _uploadSubscription?.cancel();
       
       if (mounted) Navigator.pop(context);
@@ -1418,7 +1423,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'selecting media from gallery');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error selecting media: $e'),
@@ -1453,7 +1459,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'capturing media from camera');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error capturing media: $e'),
@@ -1563,10 +1570,10 @@ class _GalleryScreenState extends State<GalleryScreen> {
               if (url != null && url.isNotEmpty) {
                 try {
                   await FirebaseStorage.instance.refFromURL(url).delete();
-                } catch (_) {}
+                } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'deleting storage file during bulk delete'); }
               }
             }
-          } catch (_) {}
+          } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'fetching gallery item for bulk delete'); }
           await FirebaseFirestore.instance.collection('gallery').doc(docId).delete();
         }
 
@@ -1581,7 +1588,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
             backgroundColor: const Color(0xFF10B981),
           ),
         );
-      } catch (e) {
+      } catch (e, stackTrace) {
+        ErrorHandler.handleError(e, stackTrace, context: 'deleting selected gallery items');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error deleting items: $e'),
@@ -1635,10 +1643,10 @@ class _GalleryScreenState extends State<GalleryScreen> {
             if (url != null && url.isNotEmpty) {
               try {
                 await FirebaseStorage.instance.refFromURL(url).delete();
-              } catch (_) {}
+              } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'deleting storage file'); }
             }
           }
-        } catch (_) {}
+        } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'fetching gallery item for delete'); }
         await FirebaseFirestore.instance.collection('gallery').doc(docId).delete();
         
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1647,7 +1655,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
             backgroundColor: Color(0xFF10B981),
           ),
         );
-      } catch (e) {
+      } catch (e, stackTrace) {
+        ErrorHandler.handleError(e, stackTrace, context: 'deleting gallery item');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error deleting item: $e'),
@@ -1944,7 +1953,8 @@ class _GalleryScreenState extends State<GalleryScreen> {
           backgroundColor: Color(0xFF10B981),
         ),
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'updating gallery media');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error updating media: $e'),

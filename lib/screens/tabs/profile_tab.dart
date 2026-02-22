@@ -1071,7 +1071,7 @@ class _PaymentStatusCardState extends State<_PaymentStatusCard> {
                   ),
                   if (isPaymentDue && context != null)
                     ElevatedButton(
-                      onPressed: () => _handlePayment(context),
+                      onPressed: () => _handlePayment(context, className: className, enrollmentId: enrollmentId),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: const Color(0xFFDC2626),
@@ -1105,19 +1105,19 @@ class _PaymentStatusCardState extends State<_PaymentStatusCard> {
     return 'In ${(difference / 30).round()} months';
   }
 
-  void _handlePayment(BuildContext context) async {
-    // Navigate to payment screen or show payment dialog
+  void _handlePayment(BuildContext context, {required String className, required String enrollmentId}) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Redirecting to payment...'),
+      SnackBar(
+        content: Text('Go to "$className" in Classes tab to complete payment'),
         backgroundColor: Colors.orange,
+        duration: const Duration(seconds: 4),
       ),
     );
     
-    // TODO: Navigate to payment screen with enrollment details
-    // Navigator.push(context, MaterialPageRoute(
-    //   builder: (context) => PaymentScreen(enrollmentId: enrollmentId),
-    // ));
+    final homeState = context.findAncestorStateOfType<HomeScreenState>();
+    if (homeState != null) {
+      homeState.switchToTab(1);
+    }
   }
 }
 

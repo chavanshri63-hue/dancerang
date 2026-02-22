@@ -44,7 +44,7 @@ class ClassEnrollmentExpiryService {
             }
           } catch (e) {
             if (kDebugMode) {
-              print('Error updating user enrollment status: $e');
+              debugPrint('Error updating user enrollment status: $e');
             }
           }
 
@@ -63,7 +63,7 @@ class ClassEnrollmentExpiryService {
             }
           } catch (e) {
             if (kDebugMode) {
-              print('Error updating legacy user enrollment: $e');
+              debugPrint('Error updating legacy user enrollment: $e');
             }
           }
 
@@ -84,7 +84,7 @@ class ClassEnrollmentExpiryService {
             }
           } catch (e) {
             if (kDebugMode) {
-              print('Error updating global enrollment: $e');
+              debugPrint('Error updating global enrollment: $e');
             }
           }
 
@@ -143,7 +143,7 @@ class ClassEnrollmentExpiryService {
             });
           } catch (e) {
             if (kDebugMode) {
-              print('Error in transaction for expiring enrollment: $e');
+              debugPrint('Error in transaction for expiring enrollment: $e');
             }
           }
 
@@ -195,7 +195,7 @@ class ClassEnrollmentExpiryService {
                   }
                 } catch (e) {
                   if (kDebugMode) {
-                    print('Error updating user enrollment status in batch: $e');
+                    debugPrint('Error updating user enrollment status in batch: $e');
                   }
                 }
 
@@ -214,7 +214,7 @@ class ClassEnrollmentExpiryService {
                   }
                 } catch (e) {
                   if (kDebugMode) {
-                    print('Error updating legacy user enrollment in batch: $e');
+                    debugPrint('Error updating legacy user enrollment in batch: $e');
                   }
                 }
 
@@ -235,7 +235,7 @@ class ClassEnrollmentExpiryService {
                   }
                 } catch (e) {
                   if (kDebugMode) {
-                    print('Error updating global enrollment in batch: $e');
+                    debugPrint('Error updating global enrollment in batch: $e');
                   }
                 }
 
@@ -294,7 +294,7 @@ class ClassEnrollmentExpiryService {
                   });
                 } catch (e) {
                   if (kDebugMode) {
-                    print('Error in batch transaction for expiring enrollment: $e');
+                    debugPrint('Error in batch transaction for expiring enrollment: $e');
                   }
                 }
 

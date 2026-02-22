@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../widgets/glassmorphism_app_bar.dart';
+import '../utils/error_handler.dart';
 import '../services/dance_styles_service.dart';
 import 'admin_analytics_dashboard_screen.dart';
 import 'bulk_edit_videos_screen.dart';
@@ -689,7 +690,8 @@ class _AdminOnlineManagementScreenState extends State<AdminOnlineManagementScree
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'starting live stream');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -720,7 +722,8 @@ class _AdminOnlineManagementScreenState extends State<AdminOnlineManagementScree
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'stopping live stream');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -787,7 +790,8 @@ class _AdminOnlineManagementScreenState extends State<AdminOnlineManagementScree
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'deleting live stream');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1912,7 +1916,8 @@ class _AdminOnlineManagementScreenState extends State<AdminOnlineManagementScree
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'adding default styles');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1999,7 +2004,8 @@ class _AdminOnlineManagementScreenState extends State<AdminOnlineManagementScree
             ),
           );
         }
-      } catch (e) {
+      } catch (e, stackTrace) {
+        ErrorHandler.handleError(e, stackTrace, context: 'deleting dance style');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -2282,12 +2288,13 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
         } else {
           await col.doc(widget.videoId).set(data, SetOptions(merge: true));
         }
-      } catch (firestoreError) {
+      } catch (firestoreError, stackTrace) {
+        ErrorHandler.handleError(firestoreError, stackTrace, context: 'saving video to Firestore');
         if (videoRef != null) {
-          try { await videoRef.delete(); } catch (_) {}
+          try { await videoRef.delete(); } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'cleaning up video file'); }
         }
         if (thumbRef != null) {
-          try { await thumbRef.delete(); } catch (_) {}
+          try { await thumbRef.delete(); } catch (e, stackTrace) { ErrorHandler.handleError(e, stackTrace, context: 'cleaning up thumbnail file'); }
         }
         rethrow;
       }
@@ -2303,7 +2310,8 @@ class _EditOnlineVideoDialogState extends State<_EditOnlineVideoDialog> {
         );
         Navigator.pop(context);
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'uploading video');
       if (mounted && !_uploadCancelled) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -2887,7 +2895,8 @@ class _StyleEditDialogState extends State<_StyleEditDialog> {
         );
         Navigator.pop(context);
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'saving dance style');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -2952,7 +2961,8 @@ class _LiveStreamDialogState extends State<_LiveStreamDialog> {
           _scheduledDate = (data["scheduledDate"] as Timestamp).toDate();
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading live stream data');
     }
   }
   
@@ -3199,7 +3209,8 @@ class _LiveStreamDialogState extends State<_LiveStreamDialog> {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'saving live stream');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

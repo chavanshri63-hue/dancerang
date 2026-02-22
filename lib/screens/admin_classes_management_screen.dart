@@ -4,6 +4,7 @@ import '../widgets/glassmorphism_app_bar.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../models/class_model.dart';
+import '../utils/error_handler.dart';
 import '../models/package_model.dart';
 import '../services/dance_styles_service.dart';
 import '../services/branches_service.dart';
@@ -41,8 +42,8 @@ class _AdminClassesManagementScreenState extends State<AdminClassesManagementScr
       // Remove duplicates and ensure unique values
       _availableCategories = _availableCategories.toSet().toList();
       if (mounted) setState(() {});
-    } catch (e) {
-      // Fallback to default categories
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading categories');
       _availableCategories = ['hiphop', 'bollywood', 'contemporary', 'jazz', 'ballet', 'salsa'];
       if (mounted) setState(() {});
     }
@@ -278,12 +279,13 @@ class _AdminClassesManagementScreenState extends State<AdminClassesManagementScr
             // Send notification about new class
             try {
               await _sendNewClassNotification(payload, docRef.id);
-            } catch (e) {
+            } catch (e, stackTrace) {
+              ErrorHandler.handleError(e, stackTrace, context: 'sending new class notification');
             }
             
             if (mounted) Navigator.pop(context);
-          } catch (e) {
-            // Handle error
+          } catch (e, stackTrace) {
+            ErrorHandler.handleError(e, stackTrace, context: 'creating class');
           }
         },
       ),
@@ -301,8 +303,8 @@ class _AdminClassesManagementScreenState extends State<AdminClassesManagementScr
             // Emit class updated event
             EventController().emitClassUpdated(model.id, payload);
             if (mounted) Navigator.pop(context);
-          } catch (e) {
-            // Handle error
+          } catch (e, stackTrace) {
+            ErrorHandler.handleError(e, stackTrace, context: 'updating class');
           }
         },
       ),
@@ -353,7 +355,8 @@ class _AdminClassesManagementScreenState extends State<AdminClassesManagementScr
                 ),
               );
             }
-          } catch (e) {
+          } catch (e, stackTrace) {
+            ErrorHandler.handleError(e, stackTrace, context: 'updating packages');
             if (mounted) {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
@@ -403,7 +406,8 @@ class _AdminClassesManagementScreenState extends State<AdminClassesManagementScr
           'instructor': instructor,
         },
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'sending new class notification');
     }
   }
 }
@@ -851,7 +855,8 @@ class _ClassEditorDialogState extends State<_ClassEditorDialog> {
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Image uploaded'), behavior: SnackBarBehavior.floating));
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'uploading class image');
       setState(() => _uploading = false);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -871,8 +876,8 @@ class _ClassEditorDialogState extends State<_ClassEditorDialog> {
       // Remove duplicates and ensure unique values
       _availableCategories = _availableCategories.toSet().toList();
       if (mounted) setState(() {});
-    } catch (e) {
-      // Fallback to default categories
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading categories in editor');
       _availableCategories = ['hiphop', 'bollywood', 'contemporary', 'jazz', 'ballet', 'salsa'];
       if (mounted) setState(() {});
     }
@@ -904,7 +909,8 @@ class _ClassEditorDialogState extends State<_ClassEditorDialog> {
         _selectedBranch = _branches.first;
       }
       if (mounted) setState(() {});
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'loading branches');
       if (_selectedBranch.isNotEmpty && !_branches.contains(_selectedBranch)) {
         _branches = [_selectedBranch];
       }
@@ -976,7 +982,8 @@ class _ClassEditorDialogState extends State<_ClassEditorDialog> {
                       backgroundColor: const Color(0xFF10B981),
                     ),
                   );
-                } catch (e) {
+                } catch (e, stackTrace) {
+                  ErrorHandler.handleError(e, stackTrace, context: 'adding dance style');
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('Failed to add style. Please try again.'),
@@ -1050,7 +1057,8 @@ class _ClassEditorDialogState extends State<_ClassEditorDialog> {
                     _selectedBranch = branchName;
                   });
                   if (mounted) Navigator.pop(context, true);
-                } catch (e) {
+                } catch (e, stackTrace) {
+                  ErrorHandler.handleError(e, stackTrace, context: 'adding branch');
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('Failed to add branch. Please try again.'),
@@ -1402,7 +1410,8 @@ class _PackagesManagementDialogState extends State<_PackagesManagementDialog> {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'saving packages');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

@@ -51,6 +51,9 @@ class ClassEnrollmentService {
         };
       }
 
+      // Clean up stale pending_payment enrollments (older than 30 minutes)
+      await _cleanupStalePendingEnrollments(userId, classId);
+
       // Archive old completed enrollments so re-join works cleanly
       await _archiveCompletedEnrollments(userId, classId);
 
@@ -97,7 +100,7 @@ class ClassEnrollmentService {
         remainingSessions: package.totalSessions,
         startDate: now,
         endDate: endDate,
-        status: 'active',
+        status: 'pending_payment',
         packagePrice: package.price,
         paymentStatus: 'pending',
         attendanceHistory: [],
@@ -139,83 +142,119 @@ class ClassEnrollmentService {
       );
 
       if (paymentResult['success'] == true) {
-          // Use transaction to atomically update all collections
-          await _firestore.runTransaction((transaction) async {
-        // Update enrollment with payment success
-            final enrollmentRef = _firestore.collection(_enrollmentsCollection).doc(enrollmentId);
-            transaction.update(enrollmentRef, {
-          'paymentStatus': 'paid',
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+          // Fulfill enrollment after successful payment — retry up to 3 times
+          bool fulfilled = false;
+          Exception? lastError;
+          for (int attempt = 0; attempt < 3 && !fulfilled; attempt++) {
+            try {
+              await _firestore.runTransaction((transaction) async {
+                final enrollmentRef = _firestore.collection(_enrollmentsCollection).doc(enrollmentId);
+                transaction.update(enrollmentRef, {
+                  'paymentStatus': 'paid',
+                  'status': 'active',
+                  'updatedAt': FieldValue.serverTimestamp(),
+                });
 
-        // Add to user's enrollments subcollection
-            final userEnrollRef = _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('enrollments')
-                .doc(classId);
-            transaction.set(userEnrollRef, {
-          'itemId': classId,
-          'itemType': 'class',
-          'status': 'enrolled',
-          'enrolledAt': FieldValue.serverTimestamp(),
-          'totalSessions': package.totalSessions,
-          'completedSessions': 0,
-          'packageId': package.id,
-          'packageName': package.name,
-            }, SetOptions(merge: true));
+                final userEnrollRef = _firestore
+                    .collection('users')
+                    .doc(userId)
+                    .collection('enrollments')
+                    .doc(classId);
+                transaction.set(userEnrollRef, {
+                  'itemId': classId,
+                  'itemType': 'class',
+                  'status': 'enrolled',
+                  'enrolledAt': FieldValue.serverTimestamp(),
+                  'totalSessions': package.totalSessions,
+                  'completedSessions': 0,
+                  'packageId': package.id,
+                  'packageName': package.name,
+                }, SetOptions(merge: true));
 
-        // Get actual class name from classes collection
-            final classRef = _firestore.collection('classes').doc(classId);
-            final classDoc = await transaction.get(classRef);
-        String actualClassName = className;
-          if (classDoc.exists) {
-            actualClassName = classDoc.data()?['name'] ?? className;
+                final classRef = _firestore.collection('classes').doc(classId);
+                final classDoc = await transaction.get(classRef);
+                String actualClassName = className;
+                if (classDoc.exists) {
+                  actualClassName = classDoc.data()?['name'] ?? className;
+                }
+
+                final globalEnrollRef = _firestore.collection('enrollments').doc();
+                transaction.set(globalEnrollRef, {
+                  'userId': userId,
+                  'user_id': userId,
+                  'itemId': classId,
+                  'itemType': 'class',
+                  'status': 'enrolled',
+                  'enrolledAt': FieldValue.serverTimestamp(),
+                  'className': actualClassName,
+                  'totalSessions': package.totalSessions,
+                  'completedSessions': 0,
+                  'remainingSessions': package.totalSessions,
+                  'packageId': package.id,
+                  'packageName': package.name,
+                  'packagePrice': package.price,
+                  'paymentStatus': 'paid',
+                  'enrollmentId': enrollmentId,
+                });
+
+                transaction.update(classRef, {
+                  'enrolledCount': FieldValue.increment(1),
+                  'currentBookings': FieldValue.increment(1),
+                  'updatedAt': FieldValue.serverTimestamp(),
+                });
+              });
+              fulfilled = true;
+            } catch (e) {
+              lastError = e is Exception ? e : Exception(e.toString());
+              if (attempt < 2) {
+                await Future.delayed(Duration(milliseconds: 500 * (attempt + 1)));
+              }
+            }
           }
 
-            // Add to global enrollments collection
-            final globalEnrollRef = _firestore.collection('enrollments').doc();
-            transaction.set(globalEnrollRef, {
-          'userId': userId,
-          'user_id': userId, // Support both field names
-          'itemId': classId,
-          'itemType': 'class',
-          'status': 'enrolled',
-          'enrolledAt': FieldValue.serverTimestamp(),
-          'className': actualClassName,
-          'totalSessions': package.totalSessions,
-          'completedSessions': 0,
-          'remainingSessions': package.totalSessions,
-          'packageId': package.id,
-          'packageName': package.name,
-          'packagePrice': package.price,
-          'paymentStatus': 'paid',
-          'enrollmentId': enrollmentId,
-        });
-
-            // Increment class enrollment count atomically
-            transaction.update(classRef, {
-              'enrolledCount': FieldValue.increment(1),
-              'currentBookings': FieldValue.increment(1),
-              'updatedAt': FieldValue.serverTimestamp(),
-            });
-        });
-
-        return {
-          'success': true,
-          'message': 'Successfully enrolled in class!',
-          'enrollmentId': enrollmentId,
-        };
+          if (fulfilled) {
+            return {
+              'success': true,
+              'message': 'Successfully enrolled in class!',
+              'enrollmentId': enrollmentId,
+            };
+          } else {
+            // Payment succeeded but enrollment fulfillment failed — mark for reconciliation
+            try {
+              await _firestore
+                  .collection(_enrollmentsCollection)
+                  .doc(enrollmentId)
+                  .update({
+                'paymentStatus': 'paid',
+                'status': 'payment_success_unfulfilled',
+                'updatedAt': FieldValue.serverTimestamp(),
+                'fulfillmentError': lastError?.toString(),
+              });
+            } catch (_) {}
+            ErrorHandler.handleError(
+              lastError ?? Exception('Enrollment fulfillment failed after payment'),
+              StackTrace.current,
+              context: 'fulfilling enrollment after payment (all retries failed)',
+            );
+            return {
+              'success': false,
+              'message': 'Payment was successful but enrollment could not be completed. Please contact support.',
+            };
+          }
       } else {
-        // Payment failed, update enrollment status
-        await _firestore
-            .collection(_enrollmentsCollection)
-            .doc(enrollmentId)
-            .update({
-          'paymentStatus': 'failed',
-          'status': 'cancelled',
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+        // Payment failed — clean up the pending enrollment
+        try {
+          await _firestore
+              .collection(_enrollmentsCollection)
+              .doc(enrollmentId)
+              .update({
+            'paymentStatus': 'failed',
+            'status': 'cancelled',
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        } catch (cleanupErr, cleanupStack) {
+          ErrorHandler.handleError(cleanupErr, cleanupStack, context: 'cleaning up failed enrollment');
+        }
 
         return {
           'success': false,
@@ -422,6 +461,36 @@ class ClassEnrollmentService {
         'success': false,
         'message': ErrorHandler.getUserFriendlyMessage(e),
       };
+    }
+  }
+
+  /// Clean up stale pending_payment enrollments (older than 30 minutes)
+  static Future<void> _cleanupStalePendingEnrollments(String userId, String classId) async {
+    try {
+      final staleCutoff = DateTime.now().subtract(const Duration(minutes: 30));
+      final stalePending = await _firestore
+          .collection(_enrollmentsCollection)
+          .where('user_id', isEqualTo: userId)
+          .where('classId', isEqualTo: classId)
+          .where('status', isEqualTo: 'pending_payment')
+          .get();
+
+      for (final doc in stalePending.docs) {
+        final createdAt = doc.data()['createdAt'];
+        DateTime? createdTime;
+        if (createdAt is Timestamp) {
+          createdTime = createdAt.toDate();
+        }
+        if (createdTime == null || createdTime.isBefore(staleCutoff)) {
+          await doc.reference.update({
+            'status': 'cancelled',
+            'paymentStatus': 'expired',
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      }
+    } catch (e, stackTrace) {
+      ErrorHandler.handleError(e, stackTrace, context: 'cleaning up stale pending enrollments');
     }
   }
 
